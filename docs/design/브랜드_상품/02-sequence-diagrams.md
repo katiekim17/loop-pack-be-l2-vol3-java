@@ -81,7 +81,7 @@ sequenceDiagram
 ### Mermaid 다이어그램 (로그인 사용자)
 
 ```mermaid
-sequenceDiagram
+ssequenceDiagram
     participant Client
     participant ProductController
     participant ProductFacade
@@ -100,10 +100,10 @@ sequenceDiagram
     
     ProductController->>ProductFacade: getProducts(brandId, sort, page, size, userId)
     
-    par 상품 목록 조회
+    par 상품 목록 조회 (ACTIVE만)
         ProductFacade->>ProductService: findProducts(brandId, sort, page, size)
-        ProductService->>ProductRepository: findAll(brandId, sort, pageable)
-        ProductRepository->>Database: SELECT * FROM products<br/>WHERE brand_id = ? ORDER BY created_at DESC
+        ProductService->>ProductRepository: findAllActive(brandId, sort, pageable)
+        ProductRepository->>Database: SELECT * FROM products<br/>WHERE brand_id = ? AND status = 'ACTIVE'<br/>ORDER BY created_at DESC
         Database-->>ProductRepository: List<Product>
         ProductRepository-->>ProductService: List<Product>
         ProductService-->>ProductFacade: List<Product>
@@ -118,16 +118,16 @@ sequenceDiagram
         Database-->>ProductOptionRepository: Map<productId, minPrice>
         ProductOptionRepository-->>ProductOptionService: Map<productId, minPrice>
         ProductOptionService-->>ProductFacade: Map<productId, minPrice>
-    and 좋아요 수 조회
-        ProductFacade->>LikeService: countLikes(productIds)
-        LikeService->>LikeRepository: countByProductIds(productIds)
-        LikeRepository->>Database: SELECT product_id, COUNT(*)<br/>FROM likes<br/>WHERE product_id IN (?) GROUP BY product_id
-        Database-->>LikeRepository: Map<productId, likeCount>
-        LikeRepository-->>LikeService: Map<productId, likeCount>
-        LikeService-->>ProductFacade: Map<productId, likeCount>
+    and 좋아요 수 조회 (Product.like_count 사용)
+        ProductFacade->>ProductService: findLikeCounts(productIds)
+        ProductService->>ProductRepository: findLikeCountsByIds(productIds)
+        ProductRepository->>Database: SELECT id AS product_id, like_count<br/>FROM products WHERE id IN (?)
+        Database-->>ProductRepository: Map<productId, likeCount>
+        ProductRepository-->>ProductService: Map<productId, likeCount>
+        ProductService-->>ProductFacade: Map<productId, likeCount>
     and 좋아요 여부 확인
         ProductFacade->>LikeService: checkLikedByUser(userId, productIds)
-        LikeService->>LikeRepository: existsByUserIdAndProductIds(userId, productIds)
+        LikeService->>LikeRepository: findLikedProductIds(userId, productIds)
         LikeRepository->>Database: SELECT product_id FROM likes<br/>WHERE user_id = ? AND product_id IN (?)
         Database-->>LikeRepository: Set<productId>
         LikeRepository-->>LikeService: Set<productId>
@@ -187,6 +187,56 @@ sequenceDiagram
         Database-->>LikeRepository: Map<productId, likeCount>
         LikeRepository-->>LikeService: Map<productId, likeCount>
         LikeService-->>ProductFacade: Map<productId, likeCount>
+    end
+    
+    Note over ProductFacade: userId가 null이므로<br/>좋아요 여부 조회 생략
+    
+    Note over ProductFacade: 데이터 조합:<br/>Product + minPrice + likeCount<br/>(isLikedByMe 제외)
+    
+    ProductFacade-->>ProductController: Page<ProductListResponse>
+    ProductController-->>Client: 200 OK (상품 목록 + 최저가 + 좋아요 수)
+sequenceDiagram
+    participant Client
+    participant ProductController
+    participant ProductFacade
+    participant ProductService
+    participant ProductOptionService
+    participant ProductRepository
+    participant ProductOptionRepository
+    participant Database
+
+    Client->>ProductController: GET /api/v1/products?brandId=1&sort=latest
+    
+    ProductController->>ProductController: extractUserId(headers)
+    Note over ProductController: userId 없음 (비로그인)
+    
+    ProductController->>ProductFacade: getProducts(brandId, sort, page, size, null)
+    
+    par 상품 목록 조회 (ACTIVE만)
+        ProductFacade->>ProductService: findProducts(brandId, sort, page, size)
+        ProductService->>ProductRepository: findAllActive(brandId, sort, pageable)
+        ProductRepository->>Database: SELECT * FROM products<br/>WHERE brand_id = ? AND status = 'ACTIVE'<br/>ORDER BY created_at DESC
+        Database-->>ProductRepository: List<Product>
+        ProductRepository-->>ProductService: List<Product>
+        ProductService-->>ProductFacade: List<Product>
+    end
+    
+    Note over ProductFacade: productIds 추출
+    
+    par 최저가 계산
+        ProductFacade->>ProductOptionService: calculateMinPrices(productIds)
+        ProductOptionService->>ProductOptionRepository: findMinPricesByProductIds(productIds)
+        ProductOptionRepository->>Database: SELECT product_id, MIN(price)<br/>FROM product_options<br/>WHERE product_id IN (?) GROUP BY product_id
+        Database-->>ProductOptionRepository: Map<productId, minPrice>
+        ProductOptionRepository-->>ProductOptionService: Map<productId, minPrice>
+        ProductOptionService-->>ProductFacade: Map<productId, minPrice>
+    and 좋아요 수 조회 (Product.like_count 사용)
+        ProductFacade->>ProductService: findLikeCounts(productIds)
+        ProductService->>ProductRepository: findLikeCountsByIds(productIds)
+        ProductRepository->>Database: SELECT id AS product_id, like_count<br/>FROM products WHERE id IN (?)
+        Database-->>ProductRepository: Map<productId, likeCount>
+        ProductRepository-->>ProductService: Map<productId, likeCount>
+        ProductService-->>ProductFacade: Map<productId, likeCount>
     end
     
     Note over ProductFacade: userId가 null이므로<br/>좋아요 여부 조회 생략
@@ -271,11 +321,11 @@ sequenceDiagram
     
     ProductController->>ProductFacade: getProductDetail(productId, userId)
     
-    ProductFacade->>ProductService: findProduct(productId)
-    ProductService->>ProductRepository: findById(productId)
-    ProductRepository->>Database: SELECT * FROM products WHERE product_id = ?
+    ProductFacade->>ProductService: findActiveProduct(productId)
+    ProductService->>ProductRepository: findActiveById(productId)
+    ProductRepository->>Database: SELECT * FROM products WHERE product_id = ? AND status = 'ACTIVE'
     
-    alt 상품 존재
+    alt 상품 존재 (ACTIVE)
         Database-->>ProductRepository: Product
         ProductRepository-->>ProductService: Product
         ProductService-->>ProductFacade: Product
@@ -283,24 +333,24 @@ sequenceDiagram
         par 옵션 목록 조회
             ProductFacade->>ProductOptionService: findOptions(productId)
             ProductOptionService->>ProductOptionRepository: findByProductId(productId)
-            ProductOptionRepository->>Database: SELECT * FROM product_options<br/>WHERE product_id = ?<br/>ORDER BY created_at
+            ProductOptionRepository->>Database: SELECT * FROM product_options<br/>WHERE product_id = ? ORDER BY created_at
             Database-->>ProductOptionRepository: List<ProductOption>
             ProductOptionRepository-->>ProductOptionService: List<ProductOption>
             ProductOptionService-->>ProductFacade: List<ProductOption>
         and 이미지 목록 조회
             ProductFacade->>ProductImageService: findImages(productId)
             ProductImageService->>ProductImageRepository: findByProductId(productId)
-            ProductImageRepository->>Database: SELECT * FROM product_images<br/>WHERE product_id = ?<br/>ORDER BY display_order
+            ProductImageRepository->>Database: SELECT * FROM product_images<br/>WHERE product_id = ? ORDER BY display_order
             Database-->>ProductImageRepository: List<ProductImage>
             ProductImageRepository-->>ProductImageService: List<ProductImage>
             ProductImageService-->>ProductFacade: List<ProductImage>
-        and 좋아요 수 조회
-            ProductFacade->>LikeService: countLikes(productId)
-            LikeService->>LikeRepository: countByProductId(productId)
-            LikeRepository->>Database: SELECT COUNT(*) FROM likes<br/>WHERE product_id = ?
-            Database-->>LikeRepository: likeCount
-            LikeRepository-->>LikeService: likeCount
-            LikeService-->>ProductFacade: likeCount
+        and 좋아요 수 조회 (Product.like_count)
+            ProductFacade->>ProductService: getLikeCount(productId)
+            ProductService->>ProductRepository: findLikeCountById(productId)
+            ProductRepository->>Database: SELECT like_count FROM products WHERE product_id = ?
+            Database-->>ProductRepository: likeCount
+            ProductRepository-->>ProductService: likeCount
+            ProductService-->>ProductFacade: likeCount
         and 좋아요 여부 확인
             ProductFacade->>LikeService: checkLikedByUser(userId, productId)
             LikeService->>LikeRepository: existsByUserIdAndProductId(userId, productId)
@@ -315,7 +365,7 @@ sequenceDiagram
         ProductFacade-->>ProductController: ProductDetailResponse
         ProductController-->>Client: 200 OK (상품 상세 정보)
         
-    else 상품 없음
+    else 상품 없음 or 비활성 (DRAFT/INACTIVE)
         Database-->>ProductRepository: null
         ProductRepository-->>ProductService: null
         ProductService-->>ProductFacade: throw ProductNotFoundException
@@ -334,11 +384,9 @@ sequenceDiagram
     participant ProductService
     participant ProductOptionService
     participant ProductImageService
-    participant LikeService
     participant ProductRepository
     participant ProductOptionRepository
     participant ProductImageRepository
-    participant LikeRepository
     participant Database
 
     Client->>ProductController: GET /api/v1/products/{productId}
@@ -348,11 +396,11 @@ sequenceDiagram
     
     ProductController->>ProductFacade: getProductDetail(productId, null)
     
-    ProductFacade->>ProductService: findProduct(productId)
-    ProductService->>ProductRepository: findById(productId)
-    ProductRepository->>Database: SELECT * FROM products WHERE product_id = ?
+    ProductFacade->>ProductService: findActiveProduct(productId)
+    ProductService->>ProductRepository: findActiveById(productId)
+    ProductRepository->>Database: SELECT * FROM products WHERE product_id = ? AND status = 'ACTIVE'
     
-    alt 상품 존재
+    alt 상품 존재 (ACTIVE)
         Database-->>ProductRepository: Product
         ProductRepository-->>ProductService: Product
         ProductService-->>ProductFacade: Product
@@ -360,24 +408,24 @@ sequenceDiagram
         par 옵션 목록 조회
             ProductFacade->>ProductOptionService: findOptions(productId)
             ProductOptionService->>ProductOptionRepository: findByProductId(productId)
-            ProductOptionRepository->>Database: SELECT * FROM product_options
+            ProductOptionRepository->>Database: SELECT * FROM product_options<br/>WHERE product_id = ? ORDER BY created_at
             Database-->>ProductOptionRepository: List<ProductOption>
             ProductOptionRepository-->>ProductOptionService: List<ProductOption>
             ProductOptionService-->>ProductFacade: List<ProductOption>
         and 이미지 목록 조회
             ProductFacade->>ProductImageService: findImages(productId)
             ProductImageService->>ProductImageRepository: findByProductId(productId)
-            ProductImageRepository->>Database: SELECT * FROM product_images
+            ProductImageRepository->>Database: SELECT * FROM product_images<br/>WHERE product_id = ? ORDER BY display_order
             Database-->>ProductImageRepository: List<ProductImage>
             ProductImageRepository-->>ProductImageService: List<ProductImage>
             ProductImageService-->>ProductFacade: List<ProductImage>
-        and 좋아요 수 조회
-            ProductFacade->>LikeService: countLikes(productId)
-            LikeService->>LikeRepository: countByProductId(productId)
-            LikeRepository->>Database: SELECT COUNT(*) FROM likes
-            Database-->>LikeRepository: likeCount
-            LikeRepository-->>LikeService: likeCount
-            LikeService-->>ProductFacade: likeCount
+        and 좋아요 수 조회 (Product.like_count)
+            ProductFacade->>ProductService: getLikeCount(productId)
+            ProductService->>ProductRepository: findLikeCountById(productId)
+            ProductRepository->>Database: SELECT like_count FROM products WHERE product_id = ?
+            Database-->>ProductRepository: likeCount
+            ProductRepository-->>ProductService: likeCount
+            ProductService-->>ProductFacade: likeCount
         end
         
         Note over ProductFacade: userId가 null이므로<br/>좋아요 여부 조회 생략
@@ -387,7 +435,7 @@ sequenceDiagram
         ProductFacade-->>ProductController: ProductDetailResponse
         ProductController-->>Client: 200 OK (상품 상세 정보)
         
-    else 상품 없음
+    else 상품 없음 or 비활성 (DRAFT/INACTIVE)
         Database-->>ProductRepository: null
         ProductRepository-->>ProductService: null
         ProductService-->>ProductFacade: throw ProductNotFoundException

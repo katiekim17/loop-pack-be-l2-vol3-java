@@ -4,10 +4,10 @@
 
 이 문서에서는 **4개의 시퀀스 다이어그램**을 작성합니다:
 
-1. **좋아요 등록** - 단순 INSERT, 카운트는 실시간 계산
+1. **좋아요 등록** - 단순 INSERT, 카운트는 비동기 반영(products.like_count)
 2. **좋아요 취소** - 멱등성 보장
 3. **좋아요 목록 조회** - 본인 것만 조회
-4. **상품 조회 (좋아요 수 포함)** - COUNT 쿼리로 실시간 계산
+4. **상품 조회 (좋아요 수 포함)** - products.like_count 조회
 
 각 다이어그램에서 주목할 점:
 - **트랜잭션 경계**: 어디까지가 하나의 원자적 작업인가?
@@ -30,7 +30,9 @@ sequenceDiagram
     actor User as 사용자
     participant API as LikeController
     participant Service as LikeService
+    participant ProdSvc as ProductService
     participant Repo as LikeRepository
+    participant Pub as EventPublisher
     participant DB as Database
 
     User->>API: POST /products/{productId}/likes
@@ -39,29 +41,41 @@ sequenceDiagram
     API->>Service: createLike(userId, productId)
     activate Service
     
-    Service->>Repo: existsByUserIdAndProductId(userId, productId)
-    activate Repo
-    Repo->>DB: SELECT EXISTS(...)
-    DB-->>Repo: false
-    Repo-->>Service: false
-    deactivate Repo
+    Service->>ProdSvc: validateProductActive(productId)
+    activate ProdSvc
+    ProdSvc->>DB: SELECT status FROM products WHERE id = ?
+    DB-->>ProdSvc: ACTIVE
+    ProdSvc-->>Service: OK
+    deactivate ProdSvc
     
-    Note over Service: 중복 아님 확인
+    Note over Service: 중복 방지는 DB Unique가 최종 보루
     
     Service->>Repo: save(Like)
     activate Repo
     Repo->>DB: INSERT INTO likes<br/>(user_id, product_id, created_at)
     Note over DB: Unique(user_id, product_id)
-    DB-->>Repo: 성공
-    Repo-->>Service: Like 객체
+    alt 중복이면
+        DB-->>Repo: UniqueViolation
+        Repo-->>Service: DuplicateLikeException
+    else 성공
+        DB-->>Repo: 성공
+        Repo-->>Service: Like 객체
+    end
     deactivate Repo
     
-    Note over Service: 트랜잭션 커밋<br/>카운트 업데이트 없음
-    
-    Service-->>API: Like 객체
+    alt 성공
+        Service->>Pub: publish(LikeCreated)
+        activate Pub
+        Pub-->>Service: publish 요청 완료(비동기)
+        deactivate Pub
+        
+        Service-->>API: 성공
+        API-->>User: 201 Created
+    else 중복
+        Service-->>API: 409 Conflict
+        API-->>User: 409 Conflict
+    end
     deactivate Service
-    
-    API-->>User: 201 Created
     deactivate API
 ```
 
@@ -92,11 +106,12 @@ sequenceDiagram
 존재하지 않는 좋아요를 취소해도 성공 응답을 주기 때문에, 이 플로우를 명확히 해야 합니다.
 
 ```mermaid
-sequenceDiagram
+ssequenceDiagram
     actor User as 사용자
     participant API as LikeController
     participant Service as LikeService
     participant Repo as LikeRepository
+    participant Pub as EventPublisher
     participant DB as Database
     participant Logger as ErrorLogger
 
@@ -108,27 +123,38 @@ sequenceDiagram
     
     Service->>Repo: findByUserIdAndProductId(userId, productId)
     activate Repo
-    Repo->>DB: SELECT
-    DB-->>Repo: null (존재하지 않음)
-    Repo-->>Service: null
+    Repo->>DB: SELECT id FROM likes WHERE user_id=? AND product_id=?
+    DB-->>Repo: null or likeId
+    Repo-->>Service: null or likeId
     deactivate Repo
     
-    Note over Service: 이미 없는 좋아요
+    alt 좋아요 없음
+        Service->>Logger: warn("이미 삭제된 좋아요", userId, productId)
+        activate Logger
+        Logger-->>Service: logged
+        deactivate Logger
+        
+        Service-->>API: 성공(멱등)
+        API-->>User: 204 No Content
+    else 좋아요 존재
+        Service->>Repo: deleteById(likeId)
+        activate Repo
+        Repo->>DB: DELETE FROM likes WHERE id=?
+        DB-->>Repo: 성공
+        Repo-->>Service: 완료
+        deactivate Repo
+        
+        Service->>Pub: publish(LikeDeleted)
+        activate Pub
+        Pub-->>Service: publish 요청 완료(비동기)
+        deactivate Pub
+        
+        Service-->>API: 성공
+        API-->>User: 204 No Content
+    end
     
-    Service->>Logger: warn("이미 삭제된 좋아요", userId, productId)
-    activate Logger
-    Logger-->>Service: 로그 기록 완료
-    deactivate Logger
-    
-    Note over Service: 멱등성 보장:<br/>성공으로 간주
-    
-    Service-->>API: 성공
     deactivate Service
-    
-    API-->>User: 204 No Content
     deactivate API
-    
-    Note over User,API: 클라이언트는 정상 응답 받음<br/>내부적으로는 로그만 남김
 ```
 
 ### 정상 삭제 플로우 (참고)
@@ -224,8 +250,8 @@ sequenceDiagram
     Service->>Repo: findByUserId(authenticatedUserId)
     activate Repo
     Repo->>DB: SELECT l.*, p.*<br/>FROM likes l<br/>JOIN products p ON l.product_id = p.id<br/>WHERE l.user_id = ?
-    DB-->>Repo: List<Like>
-    Repo-->>Service: List<Like>
+    DB-->>Repo: List<Like+Product>
+    Repo-->>Service: List<LikeResponse>
     deactivate Repo
     
     Service-->>API: List<LikeResponse>
@@ -272,7 +298,6 @@ sequenceDiagram
     participant API as ProductController
     participant Service as ProductService
     participant ProdRepo as ProductRepository
-    participant LikeRepo as LikeRepository
     participant DB as Database
 
     User->>API: GET /products/{productId}
@@ -281,23 +306,16 @@ sequenceDiagram
     API->>Service: getProductDetail(productId)
     activate Service
     
-    Service->>ProdRepo: findById(productId)
+    Service->>ProdRepo: findActiveById(productId)
     activate ProdRepo
-    ProdRepo->>DB: SELECT * FROM products<br/>WHERE id = ?
-    DB-->>ProdRepo: Product 객체
-    ProdRepo-->>Service: Product 객체
+    ProdRepo->>DB: SELECT * FROM products<br/>WHERE id = ? AND status='ACTIVE'
+    DB-->>ProdRepo: Product(+like_count)
+    ProdRepo-->>Service: Product(+like_count)
     deactivate ProdRepo
     
-    Service->>LikeRepo: countByProductId(productId)
-    activate LikeRepo
-    LikeRepo->>DB: SELECT COUNT(*)<br/>FROM likes<br/>WHERE product_id = ?
-    DB-->>LikeRepo: count (예: 42)
-    LikeRepo-->>Service: 42
-    deactivate LikeRepo
+    Note over Service: like_count는 products 테이블 값 사용(최종 일관성)
     
-    Note over Service: Product + like_count 조합
-    
-    Service-->>API: ProductDetailResponse<br/>(product + likeCount: 42)
+    Service-->>API: ProductDetailResponse<br/>(product + likeCount)
     deactivate Service
     
     API-->>User: 200 OK + 상품 정보
@@ -314,7 +332,6 @@ sequenceDiagram
     participant API as ProductController
     participant Service as ProductService
     participant ProdRepo as ProductRepository
-    participant LikeRepo as LikeRepository
     participant DB as Database
 
     User->>API: GET /products?page=1
@@ -323,23 +340,14 @@ sequenceDiagram
     API->>Service: getProductList(page)
     activate Service
     
-    Service->>ProdRepo: findAll(pageable)
+    Service->>ProdRepo: findAllActive(pageable)
     activate ProdRepo
-    ProdRepo->>DB: SELECT * FROM products<br/>LIMIT 20 OFFSET 0
-    DB-->>ProdRepo: List<Product>
-    ProdRepo-->>Service: List<Product>
+    ProdRepo->>DB: SELECT * FROM products<br/>WHERE status='ACTIVE'<br/>LIMIT 20 OFFSET 0
+    DB-->>ProdRepo: List<Product(+like_count)>
+    ProdRepo-->>Service: List<Product(+like_count)>
     deactivate ProdRepo
     
-    Note over Service: 상품 ID 목록 추출<br/>[1, 2, 3, ..., 20]
-    
-    Service->>LikeRepo: countByProductIds([1,2,3,...,20])
-    activate LikeRepo
-    LikeRepo->>DB: SELECT product_id, COUNT(*)<br/>FROM likes<br/>WHERE product_id IN (...)<br/>GROUP BY product_id
-    DB-->>LikeRepo: Map<productId, count>
-    LikeRepo-->>Service: Map<1→42, 2→15, ...>
-    deactivate LikeRepo
-    
-    Note over Service: Product + count 매칭
+    Note over Service: like_count는 각 Product에 포함되어 반환
     
     Service-->>API: List<ProductListResponse>
     deactivate Service
@@ -351,9 +359,12 @@ sequenceDiagram
 ### 이 다이어그램에서 봐야 할 포인트
 
 1. **실시간 계산**
-    - 매 조회마다 `COUNT(*)` 쿼리 실행
-    - 항상 정확한 값 반환
-    - 비동기 처리나 이벤트 없음
+
+    ~~- 매 조회마다 `COUNT(*)` 쿼리 실행~~
+
+    ~~- 항상 정확한 값 반환~~
+
+    ~~- 비동기 처리나 이벤트 없음~~
 
 2. **성능 고려**
     - 단일 상품: COUNT 쿼리 1번
@@ -385,9 +396,9 @@ sequenceDiagram
 - DB 락 시간 최소화
 
 [비동기 처리]
-- 카운트 업데이트
-- 이벤트 실패해도 좋아요 등록/취소는 성공
-- 정합성은 배치로 복구
+- products.like_count 증감
+- 이벤트 실패/지연 시 정합성 불일치 가능
+- 배치로 정합성 복구
 ```
 
 ### 객체별 책임
@@ -395,11 +406,12 @@ sequenceDiagram
 | 객체 | 책임 |
 |------|------|
 | `LikeController` | HTTP 요청/응답, 인증 확인 |
-| `LikeService` | 비즈니스 로직, 이벤트 발행 |
+| `LikeService` | 좋아요 등록/취소, 상품 ACTIVE 검증 호출, 이벤트 발행 |
 | `LikeRepository` | 데이터 접근, 쿼리 실행 |
-| `EventPublisher` | 메시지 큐 전송 |
-| `LikeCountConsumer` | 카운트 업데이트 (독립 프로세스) |
-| `ProductRepository` | 상품 데이터 접근 |
+| `EventPublisher` | 이벤트 발행(비동기 시작점) |
+| `LikeCountConsumer` | like_count 증감 처리 (독립 프로세스) |
+| `ProductRepository` | 상품 조회 및 like_count 제공 |
+| `BatchJob` | likes와 like_count 불일치 보정 |
 
 ### 호출 순서의 의미
 
@@ -425,12 +437,12 @@ sequenceDiagram
 
 **결과:**
 - 좋아요는 DB에 저장됨
-- 카운트는 업데이트 안 됨
+- like_count는 갱신되지 않을 수 있음
 - 사용자는 성공 응답 받음
 
 **대응:**
 - 배치로 정합성 복구
-- `likes` 테이블 COUNT와 `products.like_count` 비교하여 보정
+- `배치로 정합성 복구 (likes COUNT vs products.like_count 비교 후 보정)
 
 ### ⚠️ 리스크 2: Consumer 처리 실패
 **상황:**  
@@ -438,7 +450,7 @@ sequenceDiagram
 
 **결과:**
 - 메시지는 큐에서 사라짐 (ack 전에 실패하면 재처리)
-- 카운트가 실제와 어긋남
+- like_count가 실제와 어긋남
 
 **대응:**
 - 현재 설계에서는 재시도 없음
@@ -452,19 +464,3 @@ sequenceDiagram
 | 재시도 없음 | 구현 단순 | 실패 시 데이터 불일치 |
 | 멱등성 보장 (취소) | 안정적인 API | 비정상 접근 추적 어려움 |
 | URL userId 무시 | 확장 가능한 구조 | URL 파라미터 의미 모호 |
-
----
-
-## 다음 단계
-
-다음 문서에서는 **클래스 다이어그램**을 작성하여:
-- 각 객체의 속성과 메서드 정의
-- 도메인 간 의존 방향 명확화
-- 응집도와 결합도 검증
-
-이후 **ERD**를 통해:
-- 테이블 구조 및 제약사항
-- 인덱스 전략
-- 데이터 정합성 보장 방법
-
-을 다룰 예정입니다.
