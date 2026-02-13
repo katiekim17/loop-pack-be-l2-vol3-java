@@ -780,18 +780,3 @@ ALTER TABLE likes ADD INDEX idx_user_id (user_id);
 -- 최근 좋아요 조회 (현재 불필요)
 -- ALTER TABLE likes ADD INDEX idx_created_at (created_at DESC);
 ```
-
----
-
-## 다음 단계
-
-이제 모든 설계 문서가 완료되었습니다:
-- ✅ 01-requirements.md (요구사항 분석)
-- ✅ 02-sequence-diagrams.md (시퀀스 다이어그램)
-- ✅ 03-class-diagram.md (클래스 다이어그램)
-- ✅ 04-erd.md (ERD)
-
-다음 할 일:
-1. 문서 검토 및 피드백
-2. 구현 시작
-3. 테스트 코드 작성
