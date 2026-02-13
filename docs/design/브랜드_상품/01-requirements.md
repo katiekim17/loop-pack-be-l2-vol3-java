@@ -19,7 +19,7 @@ Product (상품)
   ├─→ ProductImage (상품 이미지) : 1:N [product_id로 참조]
   └─→ Like (좋아요) : 1:N [product_id로 참조]
 
-User (사용자) - v2에서 추가 예정
+User (사용자)
   └─→ Like (좋아요) : 1:N [user_id로 참조]
 ```
 
