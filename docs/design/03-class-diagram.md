@@ -18,7 +18,7 @@
 │         Domain Layer                    │
 │  (Service, Entity)                      │
 └─────────────────────────────────────────┘
-                  ↓
+                 　↑
 ┌─────────────────────────────────────────┐
 │         Infrastructure Layer            │
 │  (Repository)                           │
@@ -188,6 +188,18 @@ classDiagram
         -LocalDateTime createdAt
         %% Unique(userId, productId)
     }
+    
+    class Money {
+        -long value
+        +Money(value: long)
+        %% value >= 0 (음수 방지)
+    }
+    
+    class Quantity {
+        -int value
+        +Quantity(value: int)
+        %% 주문 수량: value >= 1 / 재고 수량: value >= 0
+    }
 
     %% ============================================
     %% Infrastructure Layer (Repositories)
@@ -292,6 +304,11 @@ classDiagram
     ProductService ..> ProductRepository : uses
     ProductOptionService ..> ProductOptionRepository : uses
     ProductImageService ..> ProductImageRepository : uses
+    ProductOption ..> Money : price
+    ProductOption ..> Quantity : stockQuantity
+    OrderItem ..> Money : optionPrice
+    OrderItem ..> Quantity : quantity
+    Order ..> Money : totalAmount
     LikeService ..> LikeRepository : uses
     LikeService ..> ProductService : validates ACTIVE
     LikeService ..> EventPublisher : publishes
@@ -489,6 +506,18 @@ classDiagram
 - Unique 제약: 사용자당 상품 1개만 좋아요 가능
 - 중복 좋아요는 DB 레벨에서 방지
 - v1에서는 userId를 임시 식별자로 사용
+
+---
+
+#### Money (VO)
+- value: long
+- 생성 규칙: value >= 0 (음수 방지)
+- 사용처: ProductOption.price, Order.totalAmount, OrderItem.optionPrice
+
+#### Quantity (VO)
+- value: int
+- 생성 규칙: 주문 수량 value >= 1 / 재고 수량 value >= 0
+- 사용처: ProductOption.stockQuantity, OrderItem.quantity
 
 ---
 
