@@ -1,4 +1,4 @@
-package com.loopers.interfaces.api.member;
+package com.loopers.interfaces.api.users;
 
 import com.loopers.interfaces.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RequestHeader;
 
 @Tag(name = "Member V1 API", description = "회원 API")
-public interface MemberV1ApiSpec {
+public interface UserV1ApiSpec {
 
   @Operation(
       summary = "회원 가입 요청",
@@ -14,15 +14,15 @@ public interface MemberV1ApiSpec {
   )
     // @Schema는 Swagger API 문서에서 파라미터 설명을 보여주는 용도
     // 예제에서는 Long exampleId 같은 단일 파라미터에 붙였는데, 지금은 SignUpRequest로 통째로 받으니까 여기엔 필요 없음
-  ApiResponse<MemberV1Dto.SignUpResponse> signUp(
-      MemberV1Dto.SignUpRequest request
+  ApiResponse<UserV1Dto.SignUpResponse> signUp(
+      UserV1Dto.SignUpRequest request
   );
 
   @Operation(
       summary = "내 정보 조회",
       description = "로그인 ID로 내 회원 정보를 조회한다"
   )
-  ApiResponse<MemberV1Dto.MemberInfoResponse> getMyInfo(
+  ApiResponse<UserV1Dto.MemberInfoResponse> getMyInfo(
       @RequestHeader("X-Loopers-LoginId") String loginId,
       @RequestHeader("X-Loopers-LoginPw") String password
   );
@@ -34,7 +34,16 @@ public interface MemberV1ApiSpec {
   ApiResponse<String> changePassword(
       @RequestHeader("X-Loopers-LoginId") String loginId,
       @RequestHeader("X-Loopers-LoginPw") String password,
-      MemberV1Dto.ChangePasswordRequest request
+      UserV1Dto.ChangePasswordRequest request
+  );
+
+  @Operation(
+      summary = "내 정보 조회",
+      description = "로그인 ID로 내 회원 정보를 조회한다"
+  )
+  ApiResponse<UserV1Dto.MemberInfoResponse> getMyLikes(
+      @RequestHeader("X-Loopers-LoginId") String loginId,
+      @RequestHeader("X-Loopers-LoginPw") String password
   );
 
 }

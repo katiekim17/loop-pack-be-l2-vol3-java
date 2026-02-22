@@ -77,6 +77,6 @@ users ||--o{ orders : "places"
     }
 
     users {
-        BIGINT user_id PK "v2에서 추가 예정"
+        BIGINT user_id PK
     }
 ```

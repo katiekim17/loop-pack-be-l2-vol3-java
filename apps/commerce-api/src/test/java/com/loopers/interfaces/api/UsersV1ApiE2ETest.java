@@ -21,7 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class MemberV1ApiE2ETest {
+class UsersV1ApiE2ETest {
 
     private static final String ENDPOINT = "/api/v1/members";
 
@@ -29,7 +29,7 @@ class MemberV1ApiE2ETest {
     private final DatabaseCleanUp databaseCleanUp;
 
     @Autowired
-    public MemberV1ApiE2ETest(
+    public UsersV1ApiE2ETest(
         TestRestTemplate testRestTemplate,
         DatabaseCleanUp databaseCleanUp
     ) {
@@ -109,7 +109,7 @@ class MemberV1ApiE2ETest {
 
     @DisplayName("GET /api/v1/members/me (회원정보조회)")
     @Nested
-    class GetMemberInfo {
+    class GetUsersInfo {
 
         @DisplayName("헤더 인증 성공 시, 200 OK와 마스킹된 이름을 반환한다.")
         @Test

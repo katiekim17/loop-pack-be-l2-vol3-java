@@ -1,9 +1,9 @@
-package com.loopers.interfaces.api.member;
+package com.loopers.interfaces.api.users;
 
 
-import com.loopers.application.member.MemberInfo;
+import com.loopers.application.users.UserInfo;
 
-public class MemberV1Dto {
+public class UserV1Dto {
 
     // Request: POST방식으로 보낼때 데이터를 담는 그릇 (from 필요 없음)
     public record SignUpRequest(
@@ -16,7 +16,7 @@ public class MemberV1Dto {
 
     // Response: 변환 메서드(from)가 여기에!
     public record SignUpResponse(String loginId) {
-      public static SignUpResponse from(MemberInfo info) {
+      public static SignUpResponse from(UserInfo info) {
         return new SignUpResponse(info.loginId());
       }
     }
@@ -27,7 +27,7 @@ public class MemberV1Dto {
         String birthDate,
         String email
     ) {
-      public static MemberInfoResponse from(MemberInfo info) {
+      public static MemberInfoResponse from(UserInfo info) {
         return new MemberInfoResponse(
             info.loginId(),
             info.name(),
