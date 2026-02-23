@@ -1,5 +1,49 @@
 package com.loopers.domain.brand;
 
-public class Brand {
+import com.loopers.domain.BaseEntity;
+import com.loopers.support.error.CoreException;
+import com.loopers.support.error.ErrorType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 
+@Entity
+@Table(name = "brand")
+public class Brand extends BaseEntity {
+
+    @Column(name = "name", nullable = false, length = 100)
+    private String name;
+
+    @Column(name = "description", length = 500)
+    private String description;
+
+    @Column(name = "logo_image_url", length = 500)
+    private String logoImageUrl;
+
+    protected Brand() {}
+
+    public Brand(String name) {
+        this(name, null, null);
+    }
+
+    public Brand(String name, String description, String logoImageUrl) {
+        if (name == null || name.isBlank()) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "브랜드명은 비어있을 수 없습니다.");
+        }
+        this.name = name;
+        this.description = description;
+        this.logoImageUrl = logoImageUrl;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public String getLogoImageUrl() {
+        return logoImageUrl;
+    }
 }
