@@ -27,8 +27,4 @@ public class BrandController implements BrandV1ApiSpec {
     return ApiResponse.success(response);
   }
 
-
-  // TODO /api/v1/products  // 상품 목록 조회
-  // TODO /api/v1/products/{productId}  // 상품 정보 조회
-
 }

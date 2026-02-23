@@ -1,5 +1,10 @@
 package com.loopers.domain.product;
 
-public class ProductImageRepository {
+import java.util.List;
 
+public interface ProductImageRepository {
+
+    ProductImage save(ProductImage productImage);
+
+    List<ProductImage> findAllByProductId(Long productId);
 }
