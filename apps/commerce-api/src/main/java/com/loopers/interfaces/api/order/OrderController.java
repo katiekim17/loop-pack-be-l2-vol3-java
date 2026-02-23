@@ -1,7 +1,17 @@
 package com.loopers.interfaces.api.order;
 
+import com.loopers.application.order.OrderFacade;
+import com.loopers.application.order.OrderInfo;
+import com.loopers.application.order.OrderItemCommand;
+import com.loopers.interfaces.api.ApiResponse;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
@@ -9,34 +19,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/orders")
 public class OrderController implements OrderV1ApiSpec {
 
-//  @PostMapping
-//  @ResponseStatus(HttpStatus.CREATED)
-//  @Override
-//  public ApiResponse<SignUpResponse> makeOrder(@RequestBody SignUpRequest request) {
-//    UserInfo info = userFacade.signupUser(request);
-//    UserV1Dto.SignUpResponse response = UserV1Dto.SignUpResponse.from(info);
-//    return ApiResponse.success(response);
-//  }
-//
-//  @GetMapping("/startAt=2026-01-31&endAt=2026-02-10")
-//  @Override
-//  public ApiResponse<MemberInfoResponse> getMyOrders(
-//      @RequestHeader("X-Loopers-LoginId") String loginId,
-//      @RequestHeader("X-Loopers-LoginPw") String password
-//  ) {
-//    UserInfo info = userFacade.getMyInfo(loginId, password);
-//    MemberInfoResponse response = MemberInfoResponse.from(info);
-//    return ApiResponse.success(response);
-//  }
-//
-//  @GetMapping("/{orderId}")
-//  @Override
-//  public ApiResponse<MemberInfoResponse> getOrder(
-//      @RequestHeader("X-Loopers-LoginId") String loginId,
-//      @RequestHeader("X-Loopers-LoginPw") String password
-//  ) {
-//    UserInfo info = userFacade.getMyInfo(loginId, password);
-//    MemberInfoResponse response = MemberInfoResponse.from(info);
-//    return ApiResponse.success(response);
-//  }
+    private final OrderFacade orderFacade;
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @Override
+    public ApiResponse<OrderV1Dto.CreateOrderResponse> createOrder(
+        @RequestHeader("X-Loopers-LoginId") String loginId,
+        @RequestHeader("X-Loopers-LoginPw") String password,
+        @RequestBody OrderV1Dto.CreateOrderRequest request
+    ) {
+        List<OrderItemCommand> commands = request.items().stream()
+            .map(item -> new OrderItemCommand(item.productId(), item.quantity()))
+            .toList();
+
+        OrderInfo info = orderFacade.createOrder(loginId, password, commands);
+
+        return ApiResponse.success(OrderV1Dto.CreateOrderResponse.from(info));
+    }
 }
