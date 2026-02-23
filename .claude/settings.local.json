@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(./gradlew test:*)",
-      "Bash(./gradlew :apps:commerce-api:test:*)"
+      "Bash(./gradlew :apps:commerce-api:test:*)",
+      "Bash(./gradlew :apps:commerce-api:compileJava:*)"
     ]
   }
 }
