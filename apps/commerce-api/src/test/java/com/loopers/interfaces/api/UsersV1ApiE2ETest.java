@@ -23,7 +23,7 @@ import org.springframework.http.ResponseEntity;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class UsersV1ApiE2ETest {
 
-    private static final String ENDPOINT = "/api/v1/members";
+    private static final String ENDPOINT = "/api/v1/users";
 
     private final TestRestTemplate testRestTemplate;
     private final DatabaseCleanUp databaseCleanUp;

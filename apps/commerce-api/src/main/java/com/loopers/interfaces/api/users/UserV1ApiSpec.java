@@ -22,7 +22,7 @@ public interface UserV1ApiSpec {
       summary = "내 정보 조회",
       description = "로그인 ID로 내 회원 정보를 조회한다"
   )
-  ApiResponse<UserV1Dto.MemberInfoResponse> getMyInfo(
+  ApiResponse<UserV1Dto.UserInfoResponse> getMyInfo(
       @RequestHeader("X-Loopers-LoginId") String loginId,
       @RequestHeader("X-Loopers-LoginPw") String password
   );
@@ -41,7 +41,7 @@ public interface UserV1ApiSpec {
       summary = "내 정보 조회",
       description = "로그인 ID로 내 회원 정보를 조회한다"
   )
-  ApiResponse<UserV1Dto.MemberInfoResponse> getMyLikes(
+  ApiResponse<UserV1Dto.UserInfoResponse> getMyLikes(
       @RequestHeader("X-Loopers-LoginId") String loginId,
       @RequestHeader("X-Loopers-LoginPw") String password
   );

@@ -21,14 +21,14 @@ public class UserV1Dto {
       }
     }
 
-    public record MemberInfoResponse(
+    public record UserInfoResponse(
         String loginId,
         String name,
         String birthDate,
         String email
     ) {
-      public static MemberInfoResponse from(UserInfo info) {
-        return new MemberInfoResponse(
+      public static UserInfoResponse from(UserInfo info) {
+        return new UserInfoResponse(
             info.loginId(),
             info.name(),
             info.birthDate(),

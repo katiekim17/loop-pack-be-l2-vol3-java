@@ -4,7 +4,7 @@ import com.loopers.application.users.UserFacade;
 import com.loopers.application.users.UserInfo;
 import com.loopers.interfaces.api.ApiResponse;
 import com.loopers.interfaces.api.users.UserV1Dto.ChangePasswordRequest;
-import com.loopers.interfaces.api.users.UserV1Dto.MemberInfoResponse;
+import com.loopers.interfaces.api.users.UserV1Dto.UserInfoResponse;
 import com.loopers.interfaces.api.users.UserV1Dto.SignUpRequest;
 import com.loopers.interfaces.api.users.UserV1Dto.SignUpResponse;
 import lombok.RequiredArgsConstructor;
@@ -40,16 +40,16 @@ public class UserV1Controller implements UserV1ApiSpec {
 
   @GetMapping("/me")
   @Override
-  public ApiResponse<MemberInfoResponse> getMyInfo(
+  public ApiResponse<UserInfoResponse> getMyInfo(
       @RequestHeader("X-Loopers-LoginId") String loginId,
       @RequestHeader("X-Loopers-LoginPw") String password
   ) {
     UserInfo info = userFacade.getMyInfo(loginId, password);
-    MemberInfoResponse response = MemberInfoResponse.from(info);
+    UserInfoResponse response = UserInfoResponse.from(info);
     return ApiResponse.success(response);
   }
 
-  @PatchMapping("/password")
+  @PatchMapping("/me/password")
   @Override
   public ApiResponse<String> changePassword(
       @RequestHeader("X-Loopers-LoginId") String loginId,
@@ -62,12 +62,12 @@ public class UserV1Controller implements UserV1ApiSpec {
 
   @GetMapping("me/likes")
   @Override
-  public ApiResponse<MemberInfoResponse> getMyLikes(
+  public ApiResponse<UserInfoResponse> getMyLikes(
       @RequestHeader("X-Loopers-LoginId") String loginId,
       @RequestHeader("X-Loopers-LoginPw") String password
   ) {
     UserInfo info = userFacade.getMyInfo(loginId, password);
-    MemberInfoResponse response = MemberInfoResponse.from(info);
+    UserInfoResponse response = UserInfoResponse.from(info);
     return ApiResponse.success(response);
   }
 
