@@ -217,34 +217,34 @@ Authorization: Not Required (로그인 시 좋아요 여부 추가 제공)
 }
 ```
 
-**반환 정보 (로그인 사용자):**
-```json
-{
-  "productId": 1,
-  "name": "상품명",
-  "description": "상품 상세 설명",
-  "brand": {
-    "brandId": 1,
-    "name": "브랜드명"
-  },
-  "imageUrls": [
-    "https://example.com/product-image1.png",
-    "https://example.com/product-image2.png"
-  ],
-  "options": [
-    {
-      "productOptionId": 1,
-      "name": "S 사이즈",
-      "price": 10000,
-      "stockQuantity": 50,
-      "isAvailable": true
-    }
-  ],
-  "likeCount": 150,
-  "isLikedByMe": true,
-  "createdAt": "2025-01-01T00:00:00"
-}
-```
+[//]: # (**반환 정보 &#40;로그인 사용자&#41;:**)
+[//]: # (```json)
+[//]: # ({)
+[//]: # (  "productId": 1,)
+[//]: # (  "name": "상품명",)
+[//]: # (  "description": "상품 상세 설명",)
+[//]: # (  "brand": {)
+[//]: # (    "brandId": 1,)
+[//]: # (    "name": "브랜드명")
+[//]: # (  },)
+[//]: # (  "imageUrls": [)
+[//]: # (    "https://example.com/product-image1.png",)
+[//]: # (    "https://example.com/product-image2.png")
+[//]: # (  ],)
+[//]: # (  "options": [)
+[//]: # (    {)
+[//]: # (      "productOptionId": 1,)
+[//]: # (      "name": "S 사이즈",)
+[//]: # (      "price": 10000,)
+[//]: # (      "stockQuantity": 50,)
+[//]: # (      "isAvailable": true)
+[//]: # (    })
+[//]: # (  ],)
+[//]: # (  "likeCount": 150,)
+[//]: # (  "isLikedByMe": true,)
+[//]: # (  "createdAt": "2025-01-01T00:00:00")
+[//]: # (})
+[//]: # (```)
 
 **비즈니스 규칙:**
 - **옵션별 가격**: 각 옵션은 독립적인 가격을 가짐
