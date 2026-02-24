@@ -1,7 +1,7 @@
 package com.loopers.interfaces.api.admin;
 
+import com.loopers.application.brand.BrandFacade;
 import com.loopers.application.brand.BrandInfo;
-import com.loopers.application.brand.BrandService;
 import com.loopers.application.product.ProductFacade;
 import com.loopers.interfaces.api.ApiResponse;
 import com.loopers.interfaces.api.brand.BrandV1Dto;
@@ -34,9 +34,8 @@ public class AdminController implements AdminV1ApiSpec {
   // (GET) /api-admin/v1/orders?startAt=2026-01-31&endAt=2026-02-10  // 유저의 주문 목록 조회
   // (GET) /api-admin/v1/orders/{orderId}  // 단일 주문 상세 조회
 
-  private final BrandService brandService;
+  private final BrandFacade brandFacade;
   private final ProductFacade productFacade;
-
 
 
   // (GET) /api-admin/v1/brands/{brandId} // 브랜드 상세 조회
@@ -45,7 +44,7 @@ public class AdminController implements AdminV1ApiSpec {
   public ApiResponse<BrandResponse> getBrands(
       @PathVariable(value = "brandId") Long brandId
   ) {
-    BrandInfo info = brandService.getBrandInfo(brandId);
+    BrandInfo info = brandFacade.getBrandInfo(brandId);
     BrandV1Dto.BrandResponse response = BrandV1Dto.BrandResponse.from(info);
     return ApiResponse.success(response);
   }

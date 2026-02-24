@@ -10,11 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
 @Component
-public class BrandService {
+public class BrandFacade {
 
     private final BrandRepository brandRepository;
 
-    public BrandService(BrandRepository brandRepository) {
+    public BrandFacade(BrandRepository brandRepository) {
         this.brandRepository = brandRepository;
     }
 
