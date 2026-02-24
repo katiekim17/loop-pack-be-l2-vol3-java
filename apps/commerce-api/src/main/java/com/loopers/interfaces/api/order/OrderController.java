@@ -2,9 +2,7 @@ package com.loopers.interfaces.api.order;
 
 import com.loopers.application.order.OrderFacade;
 import com.loopers.application.order.OrderInfo;
-import com.loopers.application.order.OrderItemCommand;
 import com.loopers.interfaces.api.ApiResponse;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,11 +27,7 @@ public class OrderController implements OrderV1ApiSpec {
         @RequestHeader("X-Loopers-LoginPw") String password,
         @RequestBody OrderV1Dto.CreateOrderRequest request
     ) {
-        List<OrderItemCommand> commands = request.items().stream()
-            .map(item -> new OrderItemCommand(item.productId(), item.quantity()))
-            .toList();
-
-        OrderInfo info = orderFacade.createOrder(loginId, password, commands);
+        OrderInfo info = orderFacade.createOrder(loginId, password, request.items());
 
         return ApiResponse.success(OrderV1Dto.CreateOrderResponse.from(info));
     }
