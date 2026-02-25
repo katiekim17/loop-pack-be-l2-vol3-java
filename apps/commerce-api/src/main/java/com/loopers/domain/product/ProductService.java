@@ -58,8 +58,8 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ProductListItem> getProductList(Long brandId, ProductSortType sortType, Pageable pageable) {
-        Page<Product> products = productRepository.findAll(brandId, sortType, pageable);
+    public Page<ProductListItem> getProductList(Long brandId, ProductSortType sortType, List<ProductStatus> statuses, Pageable pageable) {
+        Page<Product> products = productRepository.findAll(brandId, sortType, statuses, pageable);
         List<Long> productIds = products.getContent().stream().map(Product::getId).toList();
         List<Long> brandIds = products.getContent().stream().map(Product::getBrandId).distinct().toList();
 

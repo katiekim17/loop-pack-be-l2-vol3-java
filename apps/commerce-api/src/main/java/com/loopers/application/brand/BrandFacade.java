@@ -14,14 +14,13 @@ public class BrandFacade {
 
     private final BrandRepository brandRepository;
 
-    public BrandFacade(BrandRepository brandRepository) {
-        this.brandRepository = brandRepository;
-    }
-
     @Transactional(readOnly = true)
     public BrandInfo getBrandInfo(Long brandId) {
         Brand brand = brandRepository.findById(brandId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "존재하지 않는 브랜드입니다."));
+        if (!brand.isActive()) {
+            throw new CoreException(ErrorType.NOT_FOUND, "존재하지 않는 브랜드입니다.");
+        }
         return BrandInfo.from(brand);
     }
 }

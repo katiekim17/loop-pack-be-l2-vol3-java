@@ -52,10 +52,12 @@ class BrandV1ApiE2ETest {
         @DisplayName("유효한 brandId를 주면, brandId, name, description, logoImageUrl, createdAt을 반환한다.")
         @Test
         void returnsBrandInfo_whenValidBrandIdIsProvided() {
-            // arrange
+            // arrange - 고객 API는 ACTIVE 브랜드만 반환하므로 activate 필요
             Brand brand = brandJpaRepository.save(
                 new Brand("나이키", "스포츠 브랜드", "https://example.com/nike-logo.png")
             );
+            brand.activate();
+            brandJpaRepository.save(brand);
             Long brandId = brand.getId();
 
             // act

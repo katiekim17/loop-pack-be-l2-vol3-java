@@ -5,6 +5,8 @@ import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 
 @Entity
@@ -20,6 +22,10 @@ public class Brand extends BaseEntity {
     @Column(name = "logo_image_url", length = 500)
     private String logoImageUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private BrandStatus status = BrandStatus.PENDING;
+
     protected Brand() {}
 
     public Brand(String name) {
@@ -27,6 +33,27 @@ public class Brand extends BaseEntity {
     }
 
     public Brand(String name, String description, String logoImageUrl) {
+        if (name == null || name.isBlank()) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "브랜드명은 비어있을 수 없습니다.");
+        }
+        this.name = name;
+        this.description = description;
+        this.logoImageUrl = logoImageUrl;
+    }
+
+    public void activate() {
+        this.status = BrandStatus.ACTIVE;
+    }
+
+    public void deactivate() {
+        this.status = BrandStatus.INACTIVE;
+    }
+
+    public boolean isActive() {
+        return this.status == BrandStatus.ACTIVE;
+    }
+
+    public void updateInfo(String name, String description, String logoImageUrl) {
         if (name == null || name.isBlank()) {
             throw new CoreException(ErrorType.BAD_REQUEST, "브랜드명은 비어있을 수 없습니다.");
         }
@@ -45,5 +72,9 @@ public class Brand extends BaseEntity {
 
     public String getLogoImageUrl() {
         return logoImageUrl;
+    }
+
+    public BrandStatus getStatus() {
+        return status;
     }
 }

@@ -8,6 +8,8 @@ import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 
 @Entity
@@ -30,6 +32,10 @@ public class Product extends BaseEntity {
     @Column(name = "thumbnail_image_url", length = 500)
     private String thumbnailImageUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private ProductStatus status = ProductStatus.PENDING;
+
     protected Product() {}
 
     public Product(Long brandId, String name, Money price, String description) {
@@ -37,6 +43,35 @@ public class Product extends BaseEntity {
     }
 
     public Product(Long brandId, String name, Money price, String description, String thumbnailImageUrl) {
+        if (brandId == null) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "브랜드 ID는 비어있을 수 없습니다.");
+        }
+        if (name == null || name.isBlank()) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "상품명은 비어있을 수 없습니다.");
+        }
+        if (price == null) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "가격은 비어있을 수 없습니다.");
+        }
+        this.brandId = brandId;
+        this.name = name;
+        this.price = price;
+        this.description = description;
+        this.thumbnailImageUrl = thumbnailImageUrl;
+    }
+
+    public void activate() {
+        this.status = ProductStatus.ACTIVE;
+    }
+
+    public void deactivate() {
+        this.status = ProductStatus.INACTIVE;
+    }
+
+    public void markOutOfStock() {
+        this.status = ProductStatus.OUT_OF_STOCK;
+    }
+
+    public void updateInfo(Long brandId, String name, Money price, String description, String thumbnailImageUrl) {
         if (brandId == null) {
             throw new CoreException(ErrorType.BAD_REQUEST, "브랜드 ID는 비어있을 수 없습니다.");
         }
@@ -71,5 +106,9 @@ public class Product extends BaseEntity {
 
     public String getThumbnailImageUrl() {
         return thumbnailImageUrl;
+    }
+
+    public ProductStatus getStatus() {
+        return status;
     }
 }

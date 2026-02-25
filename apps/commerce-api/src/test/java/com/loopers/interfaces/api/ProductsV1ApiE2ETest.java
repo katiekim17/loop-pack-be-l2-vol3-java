@@ -144,7 +144,11 @@ class ProductsV1ApiE2ETest {
             // arrange
             Brand brand = brandJpaRepository.save(new Brand("나이키", "스포츠 브랜드", "https://example.com/logo.png"));
             Product product1 = productJpaRepository.save(new Product(brand.getId(), "에어맥스 90", new Money(150000L), "러닝화"));
+            product1.activate();
+            productJpaRepository.save(product1);
             Product product2 = productJpaRepository.save(new Product(brand.getId(), "조던 1", new Money(200000L), "농구화"));
+            product2.activate();
+            productJpaRepository.save(product2);
             productOptionJpaRepository.save(new ProductOption(product1.getId(), "265mm", new Money(150000L), 5L));
             productOptionJpaRepository.save(new ProductOption(product2.getId(), "270mm", new Money(200000L), 3L));
 
@@ -179,7 +183,11 @@ class ProductsV1ApiE2ETest {
             Brand nike = brandJpaRepository.save(new Brand("나이키", "스포츠 브랜드", "https://example.com/nike.png"));
             Brand adidas = brandJpaRepository.save(new Brand("아디다스", "스포츠 브랜드", "https://example.com/adidas.png"));
             Product nikeProduct = productJpaRepository.save(new Product(nike.getId(), "에어맥스 90", new Money(150000L), "러닝화"));
-            productJpaRepository.save(new Product(adidas.getId(), "울트라부스트", new Money(180000L), "러닝화"));
+            nikeProduct.activate();
+            productJpaRepository.save(nikeProduct);
+            Product adidasProduct = productJpaRepository.save(new Product(adidas.getId(), "울트라부스트", new Money(180000L), "러닝화"));
+            adidasProduct.activate();
+            productJpaRepository.save(adidasProduct);
             productOptionJpaRepository.save(new ProductOption(nikeProduct.getId(), "265mm", new Money(150000L), 5L));
 
             // act
@@ -208,7 +216,11 @@ class ProductsV1ApiE2ETest {
             // arrange
             Brand brand = brandJpaRepository.save(new Brand("나이키", null, null));
             Product cheapProduct = productJpaRepository.save(new Product(brand.getId(), "저가 상품", new Money(50000L), null));
+            cheapProduct.activate();
+            productJpaRepository.save(cheapProduct);
             Product expensiveProduct = productJpaRepository.save(new Product(brand.getId(), "고가 상품", new Money(200000L), null));
+            expensiveProduct.activate();
+            productJpaRepository.save(expensiveProduct);
             productOptionJpaRepository.save(new ProductOption(cheapProduct.getId(), "S", new Money(50000L), 10L));
             productOptionJpaRepository.save(new ProductOption(expensiveProduct.getId(), "M", new Money(200000L), 10L));
 

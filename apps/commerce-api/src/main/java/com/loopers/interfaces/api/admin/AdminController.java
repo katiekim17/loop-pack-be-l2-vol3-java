@@ -1,78 +1,170 @@
 package com.loopers.interfaces.api.admin;
 
-import com.loopers.application.brand.BrandFacade;
-import com.loopers.application.brand.BrandInfo;
-import com.loopers.application.product.ProductFacade;
+import com.loopers.application.brand.AdminBrandFacade;
+import com.loopers.application.product.AdminProductFacade;
+import com.loopers.domain.brand.BrandStatus;
+import com.loopers.domain.product.ProductStatus;
 import com.loopers.interfaces.api.ApiResponse;
-import com.loopers.interfaces.api.brand.BrandV1Dto;
-import com.loopers.interfaces.api.brand.BrandV1Dto.BrandResponse;
-import com.loopers.interfaces.api.product.ProductV1Dto;
-import com.loopers.interfaces.api.product.ProductV1Dto.ProductListItemResponse;
+import com.loopers.interfaces.api.admin.AdminBrandV1Dto.AdminBrandResponse;
+import com.loopers.interfaces.api.admin.AdminBrandV1Dto.CreateBrandRequest;
+import com.loopers.interfaces.api.admin.AdminBrandV1Dto.UpdateBrandRequest;
+import com.loopers.interfaces.api.admin.AdminProductV1Dto.AdminProductResponse;
+import com.loopers.interfaces.api.admin.AdminProductV1Dto.CreateProductRequest;
+import com.loopers.interfaces.api.admin.AdminProductV1Dto.PageResponse;
+import com.loopers.interfaces.api.admin.AdminProductV1Dto.ProductHistoryResponse;
+import com.loopers.interfaces.api.admin.AdminProductV1Dto.UpdateProductRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 어드민 브랜드/상품 관리 API.
+ * LDAP 인증은 AdminAuthInterceptor에서 body 파싱 이전에 처리하므로
+ * 이 컨트롤러는 인증이 완료된 요청만 처리한다.
+ */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/api-admin/v1")
 public class AdminController implements AdminV1ApiSpec {
-  // (GET) /api-admin/v1/brands?page=0&size=20  // 등록된 브랜드 목록 조회
 
-  // (POST) /api-admin/v1/brands  // 브랜드 등록
-  // (PUT) /api-admin/v1/brands/{brandId}  // 브랜드 정보 수정
-  // (DELETE) /api-admin/v1/brands/{brandId}  // 브랜드 삭제
+    private final AdminBrandFacade adminBrandFacade;
+    private final AdminProductFacade adminProductFacade;
 
+    // ─────────────────────────────────────────────
+    // 브랜드 관리
+    // ─────────────────────────────────────────────
 
-  // (POST) /api-admin/v1/products  // 상품 등록
-  // (PUT) /api-admin/v1/products/{productId}  // 상품 정보 수정
-  // (DELETE) /api-admin/v1/products/{productId}  // 상품 삭제
-  // (POST) /api-admin/v1/orders  // 주문 요청
-  // (GET) /api-admin/v1/orders?startAt=2026-01-31&endAt=2026-02-10  // 유저의 주문 목록 조회
-  // (GET) /api-admin/v1/orders/{orderId}  // 단일 주문 상세 조회
+    @PostMapping("/brands")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Override
+    public ApiResponse<AdminBrandResponse> createBrand(@RequestBody CreateBrandRequest request) {
+        return ApiResponse.success(AdminBrandResponse.from(
+            adminBrandFacade.createBrand(request.name(), request.description(), request.logoImageUrl())
+        ));
+    }
 
-  private final BrandFacade brandFacade;
-  private final ProductFacade productFacade;
+    @PutMapping("/brands/{brandId}")
+    @Override
+    public ApiResponse<AdminBrandResponse> updateBrand(@PathVariable Long brandId, @RequestBody UpdateBrandRequest request) {
+        return ApiResponse.success(AdminBrandResponse.from(
+            adminBrandFacade.updateBrand(brandId, request.name(), request.description(), request.logoImageUrl())
+        ));
+    }
 
+    /**
+     * 브랜드를 비활성화(INACTIVE)한다.
+     * 연관 상품의 비활성화는 BrandDeactivatedEvent를 통해 비동기로 처리된다.
+     */
+    @DeleteMapping("/brands/{brandId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Override
+    public void deactivateBrand(@PathVariable Long brandId) {
+        adminBrandFacade.deactivateBrand(brandId);
+    }
 
-  // (GET) /api-admin/v1/brands/{brandId} // 브랜드 상세 조회
-  @GetMapping("/brands/{brandId}")
-  @Override
-  public ApiResponse<BrandResponse> getBrands(
-      @PathVariable(value = "brandId") Long brandId
-  ) {
-    BrandInfo info = brandFacade.getBrandInfo(brandId);
-    BrandV1Dto.BrandResponse response = BrandV1Dto.BrandResponse.from(info);
-    return ApiResponse.success(response);
-  }
+    @GetMapping("/brands/{brandId}")
+    @Override
+    public ApiResponse<AdminBrandResponse> getBrand(@PathVariable Long brandId) {
+        // 어드민은 INACTIVE 포함 모든 상태의 브랜드 조회 가능
+        return ApiResponse.success(AdminBrandResponse.from(adminBrandFacade.getBrandInfo(brandId)));
+    }
 
+    @GetMapping("/brands")
+    @Override
+    public ApiResponse<PageResponse<AdminBrandResponse>> getBrandList(
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false, defaultValue = "0") int page,
+        @RequestParam(required = false, defaultValue = "20") int size
+    ) {
+        // status 문자열을 BrandStatus enum으로 변환 (null이면 전체 조회)
+        BrandStatus brandStatus = status != null ? BrandStatus.valueOf(status) : null;
+        return ApiResponse.success(PageResponse.from(
+            adminBrandFacade.getBrandList(brandStatus, page, size).map(AdminBrandResponse::from)
+        ));
+    }
 
-  // (GET) /api-admin/v1/products?page=0&size=20&brandId={ brandId}  // 등록된 상품 목록 조회
-  @GetMapping("/products")
-  @Override
-  public ApiResponse<ProductV1Dto.PageResponse<ProductV1Dto.ProductListItemResponse>> getProductList(
-      @RequestParam(required = false) Long brandId,
-      @RequestParam(required = false, defaultValue = "latest") String sort,
-      @RequestParam(required = false, defaultValue = "0") int page,
-      @RequestParam(required = false, defaultValue = "20") int size
-  ) {
-    Page<ProductListItemResponse> responsePage = productFacade.getProductList(brandId, sort, page, size)
-        .map(ProductV1Dto.ProductListItemResponse::from);
-    return ApiResponse.success(ProductV1Dto.PageResponse.from(responsePage));
-  }
+    // ─────────────────────────────────────────────
+    // 상품 관리
+    // ─────────────────────────────────────────────
 
-  // (GET) /api-admin/v1/products/{productId}  // 상품 상세 조회
-  @GetMapping("/products/{productId}")
-  @Override
-  public ApiResponse<ProductV1Dto.ProductDetailResponse> getProduct(
-      @PathVariable(value = "productId") Long productId
-  ) {
-    return ApiResponse.success(
-        ProductV1Dto.ProductDetailResponse.from(productFacade.getProductDetail(productId))
-    );
-  }
+    /**
+     * 상품을 등록한다.
+     * 등록 시 ProductHistory 스냅샷이 1건 자동 생성된다.
+     */
+    @PostMapping("/products")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Override
+    public ApiResponse<AdminProductResponse> createProduct(@RequestBody CreateProductRequest request) {
+        return ApiResponse.success(AdminProductResponse.from(
+            adminProductFacade.createProduct(
+                request.brandId(), request.name(), request.price(),
+                request.description(), request.thumbnailImageUrl()
+            )
+        ));
+    }
 
+    /**
+     * 상품 정보를 수정한다.
+     * 수정 시 ProductHistory 스냅샷이 1건 추가된다.
+     */
+    @PutMapping("/products/{productId}")
+    @Override
+    public ApiResponse<AdminProductResponse> updateProduct(@PathVariable Long productId, @RequestBody UpdateProductRequest request) {
+        return ApiResponse.success(AdminProductResponse.from(
+            adminProductFacade.updateProduct(
+                productId, request.brandId(), request.name(), request.price(),
+                request.description(), request.thumbnailImageUrl()
+            )
+        ));
+    }
+
+    @DeleteMapping("/products/{productId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Override
+    public void deactivateProduct(@PathVariable Long productId) {
+        adminProductFacade.deactivateProduct(productId);
+    }
+
+    @GetMapping("/products/{productId}")
+    @Override
+    public ApiResponse<AdminProductResponse> getProduct(@PathVariable Long productId) {
+        // 어드민은 PENDING/INACTIVE 포함 모든 상태의 상품 조회 가능
+        return ApiResponse.success(AdminProductResponse.from(adminProductFacade.getProductInfo(productId)));
+    }
+
+    @GetMapping("/products")
+    @Override
+    public ApiResponse<PageResponse<AdminProductResponse>> getProductList(
+        @RequestParam(required = false) Long brandId,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false, defaultValue = "0") int page,
+        @RequestParam(required = false, defaultValue = "20") int size
+    ) {
+        // status 문자열을 ProductStatus enum으로 변환 (null이면 전체 조회)
+        ProductStatus productStatus = status != null ? ProductStatus.valueOf(status) : null;
+        return ApiResponse.success(PageResponse.from(
+            adminProductFacade.getProductList(brandId, productStatus, page, size).map(AdminProductResponse::from)
+        ));
+    }
+
+    @GetMapping("/products/{productId}/history")
+    @Override
+    public ApiResponse<PageResponse<ProductHistoryResponse>> getProductHistory(
+        @PathVariable Long productId,
+        @RequestParam(required = false, defaultValue = "0") int page,
+        @RequestParam(required = false, defaultValue = "20") int size
+    ) {
+        return ApiResponse.success(PageResponse.from(
+            adminProductFacade.getProductHistory(productId, page, size).map(ProductHistoryResponse::from)
+        ));
+    }
 }
