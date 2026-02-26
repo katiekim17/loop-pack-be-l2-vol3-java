@@ -39,4 +39,5 @@ public class ProductsV1Controller implements ProductsV1ApiSpec {
             ProductV1Dto.ProductDetailResponse.from(productFacade.getProductDetail(productId))
         );
     }
+
 }

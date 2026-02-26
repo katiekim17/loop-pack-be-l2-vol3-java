@@ -209,4 +209,178 @@ class OrderV1ApiE2ETest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         }
     }
+
+    @DisplayName("GET /api/v1/orders (유저 주문 목록 조회)")
+    @Nested
+    class GetOrderList {
+
+        @DisplayName("인증 성공 시, 200 OK와 본인의 주문 목록을 반환한다.")
+        @Test
+        void returnsOrderList_whenAuthIsValid() {
+            // arrange - 주문 2건 생성
+            Brand brand = brandJpaRepository.save(new Brand("나이키"));
+            Product product = productJpaRepository.save(new Product(brand.getId(), "신발", new Money(50000L), "설명"));
+            stockJpaRepository.save(new Stock(product.getId(), 100L));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-LoginId", LOGIN_ID);
+            headers.set("X-Loopers-LoginPw", PASSWORD);
+            headers.set("Content-Type", "application/json");
+
+            Map<String, Object> orderRequest = Map.of("items", List.of(Map.of("productId", product.getId(), "quantity", 1)));
+            testRestTemplate.exchange(ENDPOINT, HttpMethod.POST, new HttpEntity<>(orderRequest, headers), new ParameterizedTypeReference<ApiResponse<Map<String, Object>>>() {});
+            testRestTemplate.exchange(ENDPOINT, HttpMethod.POST, new HttpEntity<>(orderRequest, headers), new ParameterizedTypeReference<ApiResponse<Map<String, Object>>>() {});
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> {
+                    Map<String, Object> data = response.getBody().data();
+                    assertThat(data).isNotNull();
+                    List<?> content = (List<?>) data.get("content");
+                    assertThat(content).hasSize(2);
+                }
+            );
+        }
+
+        @DisplayName("주문이 없는 유저 조회 시, 200 OK와 빈 목록을 반환한다.")
+        @Test
+        void returnsEmptyList_whenNoOrders() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-LoginId", LOGIN_ID);
+            headers.set("X-Loopers-LoginPw", PASSWORD);
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> {
+                    List<?> content = (List<?>) response.getBody().data().get("content");
+                    assertThat(content).isEmpty();
+                }
+            );
+        }
+
+        @DisplayName("잘못된 비밀번호로 요청하면, 401 Unauthorized를 반환한다.")
+        @Test
+        void returnsUnauthorized_whenPasswordIsWrong() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-LoginId", LOGIN_ID);
+            headers.set("X-Loopers-LoginPw", "WrongPass1!");
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @DisplayName("GET /api/v1/orders/{orderId} (주문 단건 상세 조회)")
+    @Nested
+    class GetOrderDetail {
+
+        @DisplayName("본인 주문 조회 시, 200 OK와 주문 아이템을 포함한 상세를 반환한다.")
+        @Test
+        void returnsOrderDetail_whenOrderBelongsToUser() {
+            // arrange - 주문 생성
+            Brand brand = brandJpaRepository.save(new Brand("나이키"));
+            Product product = productJpaRepository.save(new Product(brand.getId(), "신발", new Money(50000L), "설명"));
+            stockJpaRepository.save(new Stock(product.getId(), 100L));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-LoginId", LOGIN_ID);
+            headers.set("X-Loopers-LoginPw", PASSWORD);
+            headers.set("Content-Type", "application/json");
+
+            Map<String, Object> orderRequest = Map.of("items", List.of(Map.of("productId", product.getId(), "quantity", 2)));
+            ResponseEntity<ApiResponse<Map<String, Object>>> createResponse = testRestTemplate.exchange(
+                ENDPOINT, HttpMethod.POST, new HttpEntity<>(orderRequest, headers), new ParameterizedTypeReference<>() {}
+            );
+            Long orderId = ((Number) createResponse.getBody().data().get("orderId")).longValue();
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT + "/" + orderId,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> {
+                    Map<String, Object> data = response.getBody().data();
+                    assertThat(((Number) data.get("orderId")).longValue()).isEqualTo(orderId);
+                    assertThat(data.get("status")).isEqualTo("CREATED");
+                    assertThat(((Number) data.get("totalAmount")).longValue()).isEqualTo(100000L);
+                    List<?> items = (List<?>) data.get("items");
+                    assertThat(items).hasSize(1);
+                }
+            );
+        }
+
+        @DisplayName("존재하지 않는 주문 ID로 조회 시, 404 Not Found를 반환한다.")
+        @Test
+        void returnsNotFound_whenOrderDoesNotExist() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-LoginId", LOGIN_ID);
+            headers.set("X-Loopers-LoginPw", PASSWORD);
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT + "/999999",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        }
+
+        @DisplayName("잘못된 비밀번호로 요청하면, 401 Unauthorized를 반환한다.")
+        @Test
+        void returnsUnauthorized_whenPasswordIsWrong() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-LoginId", LOGIN_ID);
+            headers.set("X-Loopers-LoginPw", "WrongPass1!");
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT + "/1",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+    }
 }

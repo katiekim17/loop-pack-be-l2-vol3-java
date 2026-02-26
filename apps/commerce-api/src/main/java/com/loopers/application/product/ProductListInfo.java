@@ -22,7 +22,7 @@ public record ProductListInfo(
             item.brand().getName(),
             item.product().getThumbnailImageUrl(),
             item.minPrice(),
-            0L,
+            item.product().getLikeCount(),
             item.product().getCreatedAt()
         );
     }
