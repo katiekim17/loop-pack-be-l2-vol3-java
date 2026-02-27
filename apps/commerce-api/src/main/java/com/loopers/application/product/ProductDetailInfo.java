@@ -36,7 +36,7 @@ public record ProductDetailInfo(
             options.stream()
                 .map(o -> new OptionInfo(o.getId(), o.getName(), o.getPrice(), o.getStockQuantity(), o.isAvailable()))
                 .toList(),
-            0L,
+            product.getLikeCount(),
             product.getCreatedAt()
         );
     }

@@ -36,6 +36,10 @@ public class Product extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     private ProductStatus status = ProductStatus.PENDING;
 
+    // 비정규화 카운트: 좋아요 등록/취소 시 비동기 이벤트로 갱신 (Eventual Consistency)
+    @Column(name = "like_count", nullable = false)
+    private long likeCount = 0;
+
     protected Product() {}
 
     public Product(Long brandId, String name, Money price, String description) {
@@ -110,5 +114,19 @@ public class Product extends BaseEntity {
 
     public ProductStatus getStatus() {
         return status;
+    }
+
+    public void incrementLikeCount() {
+        this.likeCount++;
+    }
+
+    public void decrementLikeCount() {
+        if (this.likeCount > 0) {
+            this.likeCount--;
+        }
+    }
+
+    public long getLikeCount() {
+        return likeCount;
     }
 }

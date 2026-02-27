@@ -4,9 +4,13 @@ import com.loopers.domain.brand.Brand;
 import com.loopers.domain.common.Money;
 import com.loopers.domain.common.Quantity;
 import com.loopers.domain.product.Product;
+import com.loopers.support.error.CoreException;
+import com.loopers.support.error.ErrorType;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +52,26 @@ public class OrderService {
 
         orderItemRepository.saveAll(orderItems);
 
+        return order;
+    }
+
+    // 특정 회원의 주문 목록을 최신순으로 페이징 조회한다.
+    @Transactional(readOnly = true)
+    public Page<Order> getOrderList(Long memberId, Pageable pageable) {
+        return orderRepository.findAllByMemberId(memberId, pageable);
+    }
+
+    /**
+     * 주문 단건 조회 + 본인 소유 검증.
+     * 타인의 주문이거나 존재하지 않으면 보안상 동일하게 NOT_FOUND를 반환한다.
+     */
+    @Transactional(readOnly = true)
+    public Order getOrder(Long memberId, Long orderId) {
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "존재하지 않는 주문입니다."));
+        if (!order.getMemberId().equals(memberId)) {
+            throw new CoreException(ErrorType.NOT_FOUND, "존재하지 않는 주문입니다.");
+        }
         return order;
     }
 }
