@@ -2,6 +2,8 @@ package com.loopers.application.order;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.common.Quantity;
+import com.loopers.domain.coupon.CouponDiscount;
+import com.loopers.domain.coupon.UserCouponService;
 import com.loopers.domain.order.Order;
 import com.loopers.domain.order.OrderItem;
 import com.loopers.domain.order.OrderItemRepository;
@@ -13,11 +15,13 @@ import com.loopers.domain.users.Users;
 import com.loopers.interfaces.api.order.OrderV1Dto;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
 @Component
@@ -27,8 +31,10 @@ public class OrderFacade {
     private final ProductService productService;
     private final OrderService orderService;
     private final OrderItemRepository orderItemRepository;
+    private final UserCouponService userCouponService;
 
-    public OrderInfo createOrder(String loginId, String password, List<OrderV1Dto.OrderItemRequest> items) {
+    @Transactional
+    public OrderInfo createOrder(String loginId, String password, List<OrderV1Dto.OrderItemRequest> items, Long userCouponId) {
         Users user = userService.authenticate(loginId, password);
 
         List<Long> productIds = items.stream().map(OrderV1Dto.OrderItemRequest::productId).toList();
@@ -42,7 +48,17 @@ public class OrderFacade {
         Map<Long, Quantity> deductionMap = items.stream()
             .collect(Collectors.toMap(OrderV1Dto.OrderItemRequest::productId, item -> new Quantity(item.quantity())));
 
-        Order order = orderService.createOrder(user.getId(), products, brandMap, deductionMap);
+        long totalAmount = products.stream()
+            .mapToLong(p -> p.getPrice() * deductionMap.get(p.getId()).getValue())
+            .sum();
+
+        Optional<CouponDiscount> couponDiscount = Optional.empty();
+        if (userCouponId != null) {
+            CouponDiscount discount = userCouponService.validateAndUse(userCouponId, user.getId(), totalAmount);
+            couponDiscount = Optional.of(discount);
+        }
+
+        Order order = orderService.createOrder(user.getId(), products, brandMap, deductionMap, userCouponId, couponDiscount);
 
         return OrderInfo.from(order);
     }

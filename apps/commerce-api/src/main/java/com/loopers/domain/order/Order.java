@@ -27,9 +27,22 @@ public class Order extends BaseEntity {
     @AttributeOverride(name = "value", column = @Column(name = "total_amount", nullable = false))
     private Money totalAmount;
 
+    @Column(name = "user_coupon_id")
+    private Long userCouponId;
+
+    @Column(name = "discount_amount", nullable = false)
+    private long discountAmount = 0;
+
+    @Column(name = "final_price", nullable = false)
+    private long finalPrice;
+
     protected Order() {}
 
     public Order(Long memberId, Money totalAmount, OrderStatus status) {
+        this(memberId, totalAmount, status, null, 0);
+    }
+
+    public Order(Long memberId, Money totalAmount, OrderStatus status, Long userCouponId, long discountAmount) {
         if (memberId == null) {
             throw new CoreException(ErrorType.BAD_REQUEST, "회원 ID는 비어있을 수 없습니다.");
         }
@@ -39,6 +52,9 @@ public class Order extends BaseEntity {
         this.memberId = memberId;
         this.totalAmount = totalAmount;
         this.status = status;
+        this.userCouponId = userCouponId;
+        this.discountAmount = discountAmount;
+        this.finalPrice = totalAmount.getValue() - discountAmount;
     }
 
     public Long getMemberId() {
@@ -51,5 +67,17 @@ public class Order extends BaseEntity {
 
     public Long getTotalAmount() {
         return totalAmount.getValue();
+    }
+
+    public Long getUserCouponId() {
+        return userCouponId;
+    }
+
+    public long getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public long getFinalPrice() {
+        return finalPrice;
     }
 }
