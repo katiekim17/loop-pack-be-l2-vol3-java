@@ -6,22 +6,22 @@
 ```
 ┌─────────────────────────────────────────┐
 │         Presentation Layer              │
-│  (Controller)                           │
+│            (Controller)                 │
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐
 │         Application Layer               │
-│  (Facade - 도메인 서비스 조율)          │
+│    (Facade - 도메인 서비스 조율)           │
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐
 │         Domain Layer                    │
-│  (Service, Entity)                      │
+│       (Service, Entity)                 │
 └─────────────────────────────────────────┘
                  　↑
 ┌─────────────────────────────────────────┐
 │         Infrastructure Layer            │
-│  (Repository)                           │
+│           (Repository)                  │
 └─────────────────────────────────────────┘
 
 
@@ -29,24 +29,32 @@
 Presentation Layer
 ├── ProductController
 ├── LikeController
-└── OrderController
+├── OrderController
+├── CouponController          ← 대고객 쿠폰 API
+└── AdminCouponController     ← 어드민 쿠폰 API
 
 Application Layer
 ├── ProductFacade
-└── OrderFacade   ← 주문 유스케이스 조율
+├── OrderFacade               ← 주문 유스케이스 조율 (쿠폰 검증 포함)
+└── CouponFacade              ← 쿠폰 발급/조회 유스케이스 조율
 
 Domain Layer
 ├── Brand, Product, ProductOption, Like
 ├── Order, OrderItem, Stock
+├── Coupon, UserCoupon                ← 쿠폰 템플릿 / 발급 쿠폰
 ├── OrderService
 ├── StockDeductionService
+├── CouponService                     ← 쿠폰 템플릿 도메인 서비스
+├── UserCouponService                 ← 발급 쿠폰 도메인 서비스
 └── VO (Money, Quantity, Snapshot)
 
 Infrastructure Layer
 ├── ProductRepository
 ├── LikeRepository
 ├── OrderRepository
-└── StockRepository
+├── StockRepository
+├── CouponRepository          ← 쿠폰 템플릿 Repository
+└── UserCouponRepository      ← 발급 쿠폰 Repository
 ```
 ---
 
@@ -77,6 +85,29 @@ classDiagram
         -extractUserId(headers) Long
     }
 
+    class OrderController {
+        -OrderFacade orderFacade
+        +createOrder(request: CreateOrderRequest, headers) OrderResponse
+        -extractUserId(headers) Long
+    }
+
+    class CouponController {
+        -CouponFacade couponFacade
+        +issueCoupon(couponId: Long, headers) UserCouponResponse
+        +getMyLikes(headers, page:int, size:int) Page~UserCouponResponse~
+        -extractUserId(headers) Long
+    }
+
+    class AdminCouponController {
+        -CouponFacade couponFacade
+        +getCoupons(page:int, size:int) Page~CouponResponse~
+        +getCoupon(couponId: Long) CouponResponse
+        +createCoupon(request: CreateCouponRequest) CouponResponse
+        +updateCoupon(couponId: Long, request: UpdateCouponRequest) CouponResponse
+        +deleteCoupon(couponId: Long) void
+        +getCouponIssues(couponId: Long, page:int, size:int) Page~UserCouponResponse~
+    }
+
     %% ============================================
     %% Application Layer (Facades)
     %% ============================================
@@ -87,6 +118,26 @@ classDiagram
         -LikeService likeService
         +getProducts(brandId: Long, sort: String, page:int, size:int, userId: Long) Page~ProductListResponse~
         +getProductDetail(productId: Long, userId: Long) ProductDetailResponse
+    }
+
+    class OrderFacade {
+        -ProductService productService
+        -OrderService orderService
+        -UserCouponService userCouponService
+        +createOrder(userId: Long, request: CreateOrderRequest) OrderResponse
+    }
+
+    class CouponFacade {
+        -CouponService couponService
+        -UserCouponService userCouponService
+        +issueCoupon(userId: Long, couponId: Long) UserCouponResponse
+        +getMyLikes(userId: Long, page:int, size:int) Page~UserCouponResponse~
+        +getCoupons(page:int, size:int) Page~CouponResponse~
+        +getCoupon(couponId: Long) CouponResponse
+        +createCoupon(request: CreateCouponRequest) CouponResponse
+        +updateCoupon(couponId: Long, request: UpdateCouponRequest) CouponResponse
+        +deleteCoupon(couponId: Long) void
+        +getCouponIssues(couponId: Long, page:int, size:int) Page~UserCouponResponse~
     }
 
     %% ============================================
@@ -128,6 +179,35 @@ classDiagram
         +findLikedProductIds(userId: Long, productIds: List~Long~) Set~Long~
     }
 
+    class OrderService {
+        -OrderRepository orderRepository
+        -StockDeductionService stockDeductionService
+        +createOrder(userId: Long, items: List~OrderItemCommand~, couponDiscount: CouponDiscount) Order
+    }
+
+    class StockDeductionService {
+        -StockRepository stockRepository
+        +reserveAll(items: List~OrderItemCommand~) void
+    }
+
+    class CouponService {
+        -CouponRepository couponRepository
+        +getCoupon(couponId: Long) Coupon
+        +getActiveCoupons(page:int, size:int) Page~Coupon~
+        +createCoupon(command: CreateCouponCommand) Coupon
+        +updateCoupon(couponId: Long, command: UpdateCouponCommand) Coupon
+        +deleteCoupon(couponId: Long) void
+    }
+
+    class UserCouponService {
+        -UserCouponRepository userCouponRepository
+        -CouponService couponService
+        +issue(userId: Long, couponId: Long) UserCoupon
+        +getMyLikes(userId: Long, page:int, size:int) Page~UserCoupon~
+        +validateAndUse(userId: Long, userCouponId: Long, orderAmount: Money) CouponDiscount
+        +getIssuesByCoupon(couponId: Long, page:int, size:int) Page~UserCoupon~
+    }
+
     %% ============================================
     %% Domain Layer (Entities / Enums)
     %% ============================================
@@ -146,7 +226,7 @@ classDiagram
         -String description
         -String thumbnailImageUrl
         -ProductStatus status
-        -int likeCount  %% products.like_count (집계값)
+        -int likeCount
         -LocalDateTime createdAt
     }
 
@@ -188,13 +268,89 @@ classDiagram
         -LocalDateTime createdAt
         %% Unique(userId, productId)
     }
-    
+
+    class Order {
+        -Long id
+        -Long userId
+        -OrderStatus status
+        -Money totalAmount
+        -Long userCouponId
+        -LocalDateTime createdAt
+    }
+
+    class OrderStatus {
+        <<enumeration>>
+        CREATED
+        CONFIRMED
+        CANCELLED
+    }
+
+    class OrderItem {
+        -Long id
+        -Long orderId
+        -String productName
+        -String brandName
+        -String optionName
+        -String optionAttributes
+        -String thumbnailImageUrl
+        -Money orderPrice
+        -Money discountAmount
+        -Money finalPrice
+        -Quantity quantity
+    }
+
+    class Coupon {
+        -Long id
+        -String name
+        -CouponType type
+        -int value
+        -Integer minOrderAmount
+        -LocalDateTime expiredAt
+        -LocalDateTime createdAt
+        -LocalDateTime updatedAt
+        -LocalDateTime deletedAt
+        +isExpired() boolean
+        +calculateDiscount(orderAmount: Money) Money
+    }
+
+    class CouponType {
+        <<enumeration>>
+        FIXED
+        RATE
+    }
+
+    class UserCoupon {
+        -Long id
+        -Long userId
+        -Long couponId
+        -UserCouponStatus status
+        -LocalDateTime usedAt
+        -LocalDateTime createdAt
+        -LocalDateTime updatedAt
+        +use() void
+        +expire() void
+        %% Unique(userId, couponId)
+    }
+
+    class UserCouponStatus {
+        <<enumeration>>
+        AVAILABLE
+        USED
+        EXPIRED
+    }
+
+    class CouponDiscount {
+        -Long userCouponId
+        -Money discountAmount
+        %% 쿠폰 미적용 시 discountAmount = 0
+    }
+
     class Money {
         -long value
         +Money(value: long)
         %% value >= 0 (음수 방지)
     }
-    
+
     class Quantity {
         -int value
         +Quantity(value: int)
@@ -213,7 +369,7 @@ classDiagram
         <<interface>>
         +findActiveById(productId: Long) Optional~Product~
         +findAllActive(brandId: Long, sort: String, page:int, size:int) Page~Product~
-        +findLikeCountsByIds(productIds: List~Long~) Map~Long, Integer~  %% products.like_count batch
+        +findLikeCountsByIds(productIds: List~Long~) Map~Long, Integer~
         +findLikeCountById(productId: Long) Integer
         +incrementLikeCount(productId: Long) void
         +decrementLikeCount(productId: Long) void
@@ -237,7 +393,35 @@ classDiagram
         +deleteById(likeId: Long) void
         +findLikedProductIds(userId: Long, productIds: List~Long~) Set~Long~
         +findByUserId(userId: Long, page:int, size:int) Page~Like~
-        %% countByProductId(s)는 사용하지 않음 (like_count는 Product에 저장)
+    }
+
+    class OrderRepository {
+        <<interface>>
+        +save(order: Order) Order
+        +findById(orderId: Long) Optional~Order~
+    }
+
+    class StockRepository {
+        <<interface>>
+        +findByProductOptionId(optionId: Long) Optional~Stock~
+        +reserve(optionId: Long, quantity: int) void
+    }
+
+    class CouponRepository {
+        <<interface>>
+        +findById(couponId: Long) Optional~Coupon~
+        +findActiveById(couponId: Long) Optional~Coupon~
+        +findAllActive(page:int, size:int) Page~Coupon~
+        +save(coupon: Coupon) Coupon
+    }
+
+    class UserCouponRepository {
+        <<interface>>
+        +save(userCoupon: UserCoupon) UserCoupon
+        +findById(userCouponId: Long) Optional~UserCoupon~
+        +findByUserIdAndCouponId(userId: Long, couponId: Long) Optional~UserCoupon~
+        +findByUserId(userId: Long, page:int, size:int) Page~UserCoupon~
+        +findByCouponId(couponId: Long, page:int, size:int) Page~UserCoupon~
     }
 
     %% ============================================
@@ -283,10 +467,24 @@ classDiagram
     class ProductNotFoundException
     class BrandNotFoundException
     class DuplicateLikeException
+    class CouponNotFoundException
+    class UserCouponNotFoundException
+    class CouponAlreadyIssuedException
+    class CouponNotAvailableException
+    class CouponOwnerMismatchException
+    class CouponMinOrderAmountException
+    class CouponTypeImmutableException
 
     BusinessException <|-- ProductNotFoundException
     BusinessException <|-- BrandNotFoundException
     BusinessException <|-- DuplicateLikeException
+    BusinessException <|-- CouponNotFoundException
+    BusinessException <|-- UserCouponNotFoundException
+    BusinessException <|-- CouponAlreadyIssuedException
+    BusinessException <|-- CouponNotAvailableException
+    BusinessException <|-- CouponOwnerMismatchException
+    BusinessException <|-- CouponMinOrderAmountException
+    BusinessException <|-- CouponTypeImmutableException
 
     %% ============================================
     %% Relationships
@@ -294,24 +492,43 @@ classDiagram
     BrandController ..> BrandService : uses
     ProductController ..> ProductFacade : uses
     LikeController ..> LikeService : uses
+    OrderController ..> OrderFacade : uses
+    CouponController ..> CouponFacade : uses
+    AdminCouponController ..> CouponFacade : uses
 
     ProductFacade ..> ProductService : uses
     ProductFacade ..> ProductOptionService : uses
     ProductFacade ..> ProductImageService : uses
     ProductFacade ..> LikeService : uses
 
+    OrderFacade ..> ProductService : uses
+    OrderFacade ..> OrderService : uses
+    OrderFacade ..> UserCouponService : uses
+
+    CouponFacade ..> CouponService : uses
+    CouponFacade ..> UserCouponService : uses
+
     BrandService ..> BrandRepository : uses
     ProductService ..> ProductRepository : uses
     ProductOptionService ..> ProductOptionRepository : uses
     ProductImageService ..> ProductImageRepository : uses
-    ProductOption ..> Money : price
-    ProductOption ..> Quantity : stockQuantity
-    OrderItem ..> Money : optionPrice
-    OrderItem ..> Quantity : quantity
-    Order ..> Money : totalAmount
     LikeService ..> LikeRepository : uses
     LikeService ..> ProductService : validates ACTIVE
     LikeService ..> EventPublisher : publishes
+    OrderService ..> OrderRepository : uses
+    OrderService ..> StockDeductionService : uses
+    StockDeductionService ..> StockRepository : uses
+    CouponService ..> CouponRepository : uses
+    UserCouponService ..> UserCouponRepository : uses
+    UserCouponService ..> CouponService : uses
+
+    ProductOption ..> Money : price
+    ProductOption ..> Quantity : stockQuantity
+    OrderItem ..> Money : orderPrice / discountAmount / finalPrice
+    OrderItem ..> Quantity : quantity
+    Order ..> Money : totalAmount
+    UserCouponService ..> CouponDiscount : returns
+    OrderFacade ..> CouponDiscount : receives
 
     LikeCountConsumer ..> ProductRepository : updates like_count
     LikeCountReconcileBatch ..> LikeRepository : reads likes
@@ -321,6 +538,8 @@ classDiagram
     Product "1" --> "N" ProductOption : has
     Product "1" --> "N" ProductImage : has
     Product "1" --> "N" Like : receives
+    Coupon "1" --> "N" UserCoupon : issued as
+    Order "1" --> "N" OrderItem : contains
 ```
 
 ---
@@ -353,6 +572,30 @@ classDiagram
 
 ---
 
+#### OrderController
+
+**책임:**
+- 주문 생성 요청 처리
+- 인증 정보 추출 (userId)
+- `CreateOrderRequest`에서 `userCouponId` 포함 여부 처리 (nullable)
+- OrderFacade 호출 후 응답 DTO 반환
+
+---
+
+#### CouponController / AdminCouponController
+
+**책임:**
+- `CouponController`: 대고객 쿠폰 발급, 내 쿠폰 목록 조회 요청 처리
+- `AdminCouponController`: 쿠폰 템플릿 CRUD, 발급 내역 조회 요청 처리
+- LDAP 인증 여부는 인터셉터/필터 레벨에서 처리
+
+**예외 처리:**
+- CouponNotFoundException → 404 Not Found
+- CouponAlreadyIssuedException → 400 Bad Request
+- CouponTypeImmutableException → 400 Bad Request
+
+---
+
 ### Application Layer (Facade)
 
 #### ProductFacade
@@ -368,18 +611,33 @@ classDiagram
 - ProductNotFoundException (ProductService에서 전파)
 - ProductOptionNotFoundException (옵션이 없을 때)
 
+---
 
 #### OrderFacade
 
-**책임:** “주문 생성” 유스케이스를 끝까지 완주시키기
+**책임:** "주문 생성" 유스케이스를 끝까지 완주시키기
 
 **하는 일:**
-- 로그인 인증으로 memberId 확보
-- 요청에서 optionIds 추출
+- 로그인 인증으로 userId 확보
+- 요청에서 optionIds 및 userCouponId 추출
 - ProductService로 옵션/상품/브랜드 조회
-- ProductSnapshot 만들어서 OrderItem 재료 준비
-- OrderService 호출해서 “예약 주문 생성” 실행
+- `userCouponId`가 있을 경우 `UserCouponService.validateAndUse()` 호출
+    - 쿠폰 소유자 검증, 상태 검증, 만료 검증, 최소 주문 금액 검증
+    - 검증 통과 시 `CouponDiscount` 반환 (discountAmount 포함)
+- OrderService 호출 시 `CouponDiscount`를 함께 전달
 - 결과를 응답 DTO로 매핑
+
+---
+
+#### CouponFacade
+
+**책임:** 쿠폰 발급/조회/관리 유스케이스 조율
+
+**하는 일:**
+- 대고객: 쿠폰 발급 요청 → `CouponService` + `UserCouponService` 조율
+- 대고객: 내 쿠폰 목록 조회 → `UserCouponService` 호출
+- 어드민: 쿠폰 템플릿 CRUD → `CouponService` 호출
+- 어드민: 발급 내역 조회 → `UserCouponService` 호출
 
 ---
 
@@ -443,81 +701,119 @@ classDiagram
 **예외:**
 - DuplicateLikeException
 
+---
+
 #### OrderService
 
 **책임:** Order Aggregate 생성/상태 전이 같은 도메인 규칙
 
 **하는 일:**
 - OrderModel 생성 (status=CREATED)
-
-- OrderItemModel 생성
-
+- OrderItemModel 생성 — `orderPrice`, `discountAmount`, `finalPrice` 포함
 - StockDeductionService.reserveAll() 호출
-
 - 저장
+
+---
 
 #### StockDeductionService
 
-**책임:** “여러 Stock에 걸친 원자적 예약/확정/해제” (크로스 엔티티 규칙)
+**책임:** "여러 Stock에 걸친 원자적 예약/확정/해제" (크로스 엔티티 규칙)
 
+---
+
+#### CouponService
+
+**책임:** 쿠폰 템플릿 도메인 비즈니스 로직
+
+**하는 일:**
+- 쿠폰 템플릿 조회 (삭제 여부 포함)
+- 쿠폰 등록 시 유효성 검증 (`type`, `value`, `expiredAt`)
+- 수정 시 불변 필드(`type`, `value`) 변경 시도 감지
+- Soft delete 처리
+
+**예외:**
+- CouponNotFoundException
+- CouponTypeImmutableException
+
+---
+
+#### UserCouponService
+
+**책임:** 발급 쿠폰 도메인 비즈니스 로직
+
+**하는 일:**
+- 쿠폰 발급: 중복 여부 확인 → `UserCoupon` 생성 (status=AVAILABLE)
+- 주문 연동: `validateAndUse()` — 소유자/상태/만료/최소금액 검증 후 `USED` 처리, `CouponDiscount` 반환
+- 내 쿠폰 목록 조회
+- 어드민 발급 내역 조회
+
+**예외:**
+- UserCouponNotFoundException
+- CouponAlreadyIssuedException
+- CouponNotAvailableException
+- CouponOwnerMismatchException
+- CouponMinOrderAmountException
 
 ---
 
 ### Domain Layer (Entities)
 
-#### Brand
+#### Brand / Product / ProductOption / ProductImage / Like
 
-**설계 포인트:**
-- 불변 객체 지향 (Setter 없음)
-- 생성자를 통한 필수 값 주입
-- JPA 기본 생성자는 protected
+*(기존과 동일)*
 
 ---
 
-#### Product
+#### Order
 
 **설계 포인트:**
-- brandId는 Long 타입 (FK 제약 없음)
-- 생성자에서 비즈니스 규칙 검증
-- 도메인 무결성은 애플리케이션 레벨에서 관리
+- `userCouponId`는 nullable (쿠폰 미적용 주문 허용)
+- `totalAmount`는 쿠폰 적용 후 최종 결제 금액
 
 ---
 
-#### ProductOption
+#### OrderItem
 
 **설계 포인트:**
-- 가격, 재고 검증 로직 포함
-- `isAvailable()` 비즈니스 메서드
-- Unique 제약: 같은 상품 내 옵션명 중복 불가
+- 주문 시점 상품 정보 스냅샷 보존
+- `orderPrice`: 쿠폰 적용 전 원가
+- `discountAmount`: 쿠폰 할인 금액 (미적용 시 0)
+- `finalPrice`: 최종 결제 금액 (`orderPrice - discountAmount`)
 
 ---
 
-#### ProductImage
+#### Coupon
 
 **설계 포인트:**
-- displayOrder로 이미지 순서 관리
-- 실제 이미지 파일은 S3/CDN에 저장, URL만 DB에 보관
+- `type`, `value`는 등록 후 불변
+- `isExpired()`: `expiredAt`이 현재 시각 이전이면 true
+- `calculateDiscount(orderAmount)`: `FIXED`는 `orderAmount - value` (최솟값 0), `RATE`는 `floor(orderAmount × (1 - value / 100))`
+- Soft delete: `deletedAt != null`이면 발급 불가
 
 ---
 
-#### Like
+#### UserCoupon
 
 **설계 포인트:**
-- Unique 제약: 사용자당 상품 1개만 좋아요 가능
-- 중복 좋아요는 DB 레벨에서 방지
-- v1에서는 userId를 임시 식별자로 사용
+- `Unique(userId, couponId)` — 동일 사용자 중복 발급 방지
+- `use()`: status → USED, usedAt = 현재 시각
+- `expire()`: status → EXPIRED
+- 상태 전이는 도메인 메서드를 통해서만 가능
 
 ---
 
-#### Money (VO)
-- value: long
-- 생성 규칙: value >= 0 (음수 방지)
-- 사용처: ProductOption.price, Order.totalAmount, OrderItem.optionPrice
+#### CouponDiscount (VO)
 
-#### Quantity (VO)
-- value: int
-- 생성 규칙: 주문 수량 value >= 1 / 재고 수량 value >= 0
-- 사용처: ProductOption.stockQuantity, OrderItem.quantity
+**설계 포인트:**
+- `UserCouponService.validateAndUse()` 반환값
+- `userCouponId` + `discountAmount`를 묶어 `OrderFacade` → `OrderService`로 전달
+- 쿠폰 미적용 시 `discountAmount = 0`
+
+---
+
+#### Money / Quantity (VO)
+
+*(기존과 동일)*
 
 ---
 
@@ -555,7 +851,7 @@ classDiagram
         +BusinessRuleViolationException(message: String)
     }
 
-    %% ---- Order/Stock (예약/확정/취소 정책 반영) ----
+    %% ---- Order/Stock ----
     class OrderNotFoundException {
         +OrderNotFoundException(orderId: Long)
     }
@@ -576,6 +872,35 @@ classDiagram
         +UnauthorizedOrderActionException(orderId: Long, action: String)
     }
 
+    %% ---- Coupon ----
+    class CouponNotFoundException {
+        +CouponNotFoundException(couponId: Long)
+    }
+
+    class UserCouponNotFoundException {
+        +UserCouponNotFoundException(userCouponId: Long)
+    }
+
+    class CouponAlreadyIssuedException {
+        +CouponAlreadyIssuedException(userId: Long, couponId: Long)
+    }
+
+    class CouponNotAvailableException {
+        +CouponNotAvailableException(userCouponId: Long, status: UserCouponStatus)
+    }
+
+    class CouponOwnerMismatchException {
+        +CouponOwnerMismatchException(userCouponId: Long)
+    }
+
+    class CouponMinOrderAmountException {
+        +CouponMinOrderAmountException(required: int, actual: int)
+    }
+
+    class CouponTypeImmutableException {
+        +CouponTypeImmutableException(couponId: Long)
+    }
+
     RuntimeException <|-- BusinessException
     BusinessException <|-- BrandNotFoundException
     BusinessException <|-- ProductNotFoundException
@@ -586,71 +911,76 @@ classDiagram
     BusinessException <|-- InsufficientStockException
     BusinessException <|-- InvalidOrderStateException
     BusinessException <|-- UnauthorizedOrderActionException
+    BusinessException <|-- CouponNotFoundException
+    BusinessException <|-- UserCouponNotFoundException
+    BusinessException <|-- CouponAlreadyIssuedException
+    BusinessException <|-- CouponNotAvailableException
+    BusinessException <|-- CouponOwnerMismatchException
+    BusinessException <|-- CouponMinOrderAmountException
+    BusinessException <|-- CouponTypeImmutableException
 ```
 
 ### 예외 클래스 상세
 
+#### BrandNotFoundException / ProductNotFoundException / DuplicateLikeException / ProductOptionNotFoundException / BusinessRuleViolationException / ImageNotFoundException
 
-#### BrandNotFoundException
+*(기존과 동일)*
 
-**발생 시점:** 브랜드 조회 시 존재하지 않을 때  
+---
+
+#### CouponNotFoundException
+
+**발생 시점:** 쿠폰 템플릿이 존재하지 않거나 Soft delete된 경우  
 **HTTP 상태:** 404 Not Found  
-**복구 전략:** 사용자에게 브랜드가 존재하지 않음을 알림
+**복구 전략:** 사용자에게 쿠폰이 존재하지 않음을 알림
 
 ---
 
-#### ProductNotFoundException
+#### UserCouponNotFoundException
 
-**발생 시점:**
-- 상품 조회 시 존재하지 않을 때
-- 타이밍 이슈로 조회 중 삭제되었을 때 (동시성)
-
+**발생 시점:** 발급 쿠폰 ID로 조회 시 존재하지 않는 경우  
 **HTTP 상태:** 404 Not Found  
-**복구 전략:** 사용자에게 상품이 존재하지 않음을 알림
+**복구 전략:** 사용자에게 발급 쿠폰이 존재하지 않음을 알림
 
 ---
 
-#### ProductOptionNotFoundException
+#### CouponAlreadyIssuedException
 
-**발생 시점:** 상품은 존재하는데 옵션이 하나도 없을 때 (데이터 무결성 위반)  
-**HTTP 상태:** 500 Internal Server Error  
-**복구 전략:**
-- 시스템 관리자에게 알림
-- 데이터 정합성 복구 필요
-- 사용자에게는 일시적 오류 안내
+**발생 시점:** 동일 사용자가 동일 쿠폰을 중복 발급 시도할 때  
+**HTTP 상태:** 400 Bad Request  
+**복구 전략:** 사용자에게 이미 발급된 쿠폰임을 안내
 
 ---
 
-#### ImageNotFoundException
+#### CouponNotAvailableException
 
-**발생 시점:** 이미지 URL은 DB에 있지만 실제 리소스(S3, CDN)가 없을 때  
-**HTTP 상태:** 404 Not Found (또는 500으로 설정 가능)  
-**복구 전략:**
-- 기본 이미지로 대체
-- 시스템 관리자에게 알림 (이미지 리소스 복구 필요)
+**발생 시점:** 주문 시 `USED` 또는 `EXPIRED` 상태의 쿠폰을 사용 시도할 때  
+**HTTP 상태:** 400 Bad Request  
+**복구 전략:** 사용자에게 사용 불가 상태의 쿠폰임을 안내
 
 ---
 
-#### BusinessRuleViolationException
+#### CouponOwnerMismatchException
 
-**발생 시점:**
-- 가격이 음수일 때
-- 재고가 음수일 때
-- 기타 비즈니스 규칙 위반
-
-**HTTP 상태:** 500 Internal Server Error  
-**복구 전략:**
-- 시스템 관리자에게 알림
-- 데이터 검증 강화
-- 사용자에게는 일시적 오류 안내
+**발생 시점:** 주문 시 타 유저 소유의 쿠폰을 사용 시도할 때  
+**HTTP 상태:** 400 Bad Request  
+**복구 전략:** 사용자에게 본인 소유 쿠폰이 아님을 안내
 
 ---
 
-#### DuplicateLikeException
+#### CouponMinOrderAmountException
 
-**발생 시점:** 이미 좋아요를 누른 상품에 다시 좋아요 시도  
-**HTTP 상태:** 409 Conflict  
-**복구 전략:** 사용자에게 이미 좋아요했음을 안내
+**발생 시점:** 주문 금액이 쿠폰의 최소 주문 금액 조건에 미충족할 때  
+**HTTP 상태:** 400 Bad Request  
+**복구 전략:** 사용자에게 최소 주문 금액 조건을 안내
+
+---
+
+#### CouponTypeImmutableException
+
+**발생 시점:** 쿠폰 템플릿 수정 시 `type` 또는 `value` 변경을 시도할 때  
+**HTTP 상태:** 400 Bad Request  
+**복구 전략:** 운영자에게 해당 필드는 수정 불가임을 안내
 
 ---
 
@@ -688,7 +1018,7 @@ classDiagram
 **Facade가 필요한 경우:**
 - 여러 도메인 서비스 협력이 필요한 경우
 - 복잡한 데이터 조합이 필요한 경우
-- 조건부 처리(로그인 여부 등)가 필요한 경우
+- 조건부 처리(로그인 여부, 쿠폰 적용 여부 등)가 필요한 경우
 
 **Facade가 불필요한 경우:**
 - 단일 도메인만 다루는 경우 (예: 브랜드 조회)
@@ -707,7 +1037,14 @@ RuntimeException
       ├─ ProductOptionNotFoundException (500) ← 치명적
       ├─ ImageNotFoundException (404/500)
       ├─ BusinessRuleViolationException (500) ← 치명적
-      └─ DuplicateLikeException (409)
+      ├─ DuplicateLikeException (409)
+      ├─ CouponNotFoundException (404)
+      ├─ UserCouponNotFoundException (404)
+      ├─ CouponAlreadyIssuedException (400)
+      ├─ CouponNotAvailableException (400)
+      ├─ CouponOwnerMismatchException (400)
+      ├─ CouponMinOrderAmountException (400)
+      └─ CouponTypeImmutableException (400)
 ```
 
 #### 치명적 vs 일반 예외
@@ -720,43 +1057,25 @@ RuntimeException
 | **ImageNotFoundException** | 치명적 | 404 | 기본 이미지 대체, 알림 |
 | **BusinessRuleViolationException** | **치명적** | **500** | **시스템 알림, 데이터 검증** |
 | DuplicateLikeException | 일반 | 409 | 사용자 안내 |
+| CouponNotFoundException | 일반 | 404 | 사용자 안내 |
+| UserCouponNotFoundException | 일반 | 404 | 사용자 안내 |
+| CouponAlreadyIssuedException | 일반 | 400 | 사용자 안내 |
+| CouponNotAvailableException | 일반 | 400 | 사용자 안내 |
+| CouponOwnerMismatchException | 일반 | 400 | 사용자 안내 |
+| CouponMinOrderAmountException | 일반 | 400 | 사용자 안내 |
+| CouponTypeImmutableException | 일반 | 400 | 운영자 안내 |
 
 ---
 
 ### 4. FK 제약 없는 설계
 
-**이유:**
-- 애플리케이션 레벨에서 참조 무결성 관리
-- DB 레벨 제약으로 인한 성능 오버헤드 제거
-- 향후 샤딩, 마이크로서비스 전환 시 유연성 확보
-
-**트레이드오프:**
-- 데이터 정합성은 애플리케이션 책임
-- 고아 레코드(orphan records) 발생 가능성
-- 정기적인 데이터 정합성 체크 필요
-
-**보완 전략:**
-- Service 레벨에서 참조 검증
-- 배치 작업을 통한 정합성 체크
-- 모니터링 및 알림
+*(기존과 동일)*
 
 ---
 
 ### 5. 성능 고려사항
 
-#### N+1 문제 방지
-- Fetch Join 활용
-- 배치 조회 메서드 제공 (예: `calculateMinPrices(List<Long>)`)
-- Repository에서 IN 절 쿼리 사용
-
-#### 병렬 처리
-- Facade에서 독립적인 조회는 병렬 실행 가능
-- CompletableFuture 또는 @Async 활용 고려
-
-#### 캐싱
-- 자주 조회되는 브랜드 정보 캐싱
-- 상품 최저가 계산 결과 캐싱 (Redis)
-- 좋아요 수 캐싱 (Eventual Consistency 허용)
+*(기존과 동일)*
 
 ---
 
