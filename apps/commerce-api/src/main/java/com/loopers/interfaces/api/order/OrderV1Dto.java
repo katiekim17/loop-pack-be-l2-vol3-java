@@ -10,7 +10,8 @@ import org.springframework.data.domain.Page;
 public class OrderV1Dto {
 
     public record CreateOrderRequest(
-        List<OrderItemRequest> items
+        List<OrderItemRequest> items,
+        Long userCouponId
     ) {}
 
     public record OrderItemRequest(
@@ -22,6 +23,8 @@ public class OrderV1Dto {
         Long orderId,
         String status,
         Long totalAmount,
+        Long discountAmount,
+        Long finalPrice,
         ZonedDateTime createdAt
     ) {
         public static CreateOrderResponse from(OrderInfo info) {
@@ -29,6 +32,8 @@ public class OrderV1Dto {
                 info.orderId(),
                 info.status().name(),
                 info.totalAmount(),
+                info.discountAmount(),
+                info.finalPrice(),
                 info.createdAt()
             );
         }
@@ -39,6 +44,8 @@ public class OrderV1Dto {
         Long orderId,
         String status,
         Long totalAmount,
+        Long discountAmount,
+        Long finalPrice,
         ZonedDateTime createdAt
     ) {
         public static OrderSummaryResponse from(OrderInfo info) {
@@ -46,6 +53,8 @@ public class OrderV1Dto {
                 info.orderId(),
                 info.status().name(),
                 info.totalAmount(),
+                info.discountAmount(),
+                info.finalPrice(),
                 info.createdAt()
             );
         }

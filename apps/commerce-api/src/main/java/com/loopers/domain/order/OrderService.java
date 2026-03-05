@@ -3,11 +3,13 @@ package com.loopers.domain.order;
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.common.Money;
 import com.loopers.domain.common.Quantity;
+import com.loopers.domain.coupon.CouponDiscount;
 import com.loopers.domain.product.Product;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,13 +31,29 @@ public class OrderService {
         Map<Long, Brand> brandMap,
         Map<Long, Quantity> deductionMap
     ) {
+        return createOrder(memberId, products, brandMap, deductionMap, null, Optional.empty());
+    }
+
+    @Transactional
+    public Order createOrder(
+        Long memberId,
+        List<Product> products,
+        Map<Long, Brand> brandMap,
+        Map<Long, Quantity> deductionMap,
+        Long userCouponId,
+        Optional<CouponDiscount> couponDiscount
+    ) {
         stockDeductionService.deductAll(deductionMap);
 
         long totalAmount = products.stream()
             .mapToLong(p -> p.getPrice() * deductionMap.get(p.getId()).getValue())
             .sum();
 
-        Order order = orderRepository.save(new Order(memberId, new Money(totalAmount), OrderStatus.CREATED));
+        long discountAmount = couponDiscount.map(CouponDiscount::discountAmount).orElse(0L);
+
+        Order order = orderRepository.save(
+            new Order(memberId, new Money(totalAmount), OrderStatus.CREATED, userCouponId, discountAmount)
+        );
 
         List<OrderItem> orderItems = products.stream()
             .map(product -> {

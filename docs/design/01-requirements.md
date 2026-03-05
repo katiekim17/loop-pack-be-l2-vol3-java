@@ -9,6 +9,7 @@
 | **상품**  | 상품 카탈로그 관리 | Product, ProductOption, ProductImage |
 | **좋아요** | 사용자 관심 상품 관리 | Like |
 | **주문**  | 주문 생성 및 재고 예약 관리 | Order, OrderItem, Stock |
+| **쿠폰** | 쿠폰 발급 및 주문 할인 적용 | Coupon, UserCoupon |
 
 ### 도메인 간 관계
 ```
@@ -25,10 +26,17 @@ ProductOption (상품 옵션)
 
 User (사용자)
   ├─→ Like (좋아요) : 1:N [user_id로 참조]
-  └─→ Order (주문) : 1:N [user_id로 참조]
+  ├─→ Order (주문) : 1:N [user_id로 참조]
+  └─→ UserCoupon (발급 쿠폰) : 1:N [user_id로 참조]
 
 Order (주문)
   └─→ OrderItem (주문 항목) : 1:N [order_id로 참조]
+
+Coupon (쿠폰 템플릿)
+  └─→ UserCoupon (발급 쿠폰) : 1:N [coupon_id로 참조]
+
+UserCoupon (발급 쿠폰)
+  └─→ Order (주문) : 1:1 [user_coupon_id로 참조, 선택]
 
 ```
 
@@ -42,14 +50,11 @@ Order (주문)
     - 상태 보유 (ON_SALE / SOLD_OUT / STOPPED)
     - 재고는 옵션 단위
     - 삭제 불가
-    - 구매 조건:
-        - Product ACTIVE
-        - Option ON_SALE
-        - stock > 0
+    - 구매 조건: Product ACTIVE + Option ON_SALE + stock > 0
 - **Stock**: 옵션 단위 재고 관리
-    - stock_quantity : 실제 보유 재고
-    - reserved_quantity : 잠가 둔 재고
-    - available : 현재 주문 가능한 수량
+    - `stock_quantity`: 실제 보유 재고
+    - `reserved_quantity`: 잠가 둔 재고
+    - `available`: 현재 주문 가능한 수량
 - **ProductImage**: 상품의 이미지들 (여러 장 가능, product_id 보유)
 - **Like**: 사용자의 상품 좋아요
     - Unique(user_id, product_id)
@@ -60,14 +65,25 @@ Order (주문)
     - 상태 기반 관리 (CREATED / CONFIRMED / CANCELLED)
     - 예약 재고 기반 처리
     - All-or-Nothing 정책 적용
-      **OrderItem**: 주문 시점의 상품 정보 스냅샷 보존
+    - 쿠폰은 주문 1건에 최대 1개 적용 가능 (`userCouponId` nullable)
+    - 쿠폰 유효성 검증: 존재하지 않는 쿠폰, 이미 사용된 쿠폰, 만료된 쿠폰, 타 유저 소유 쿠폰 → 주문 실패
+    - 주문 성공 시 쿠폰은 즉시 `USED` 처리
+- **OrderItem**: 주문 시점의 상품 정보 스냅샷 보존
     - productName
     - brandName
     - optionName
     - optionAttributes
     - thumbnailImageUrl
-    - orderPrice (Money)
+    - orderPrice (Money) — 쿠폰 적용 전 금액
+    - discountAmount (Money) — 쿠폰 할인 금액 (미적용 시 0)
+    - finalPrice (Money) — 최종 결제 금액 (orderPrice - discountAmount)
     - quantity (Quantity)
+- **Coupon**: 쿠폰 템플릿. 할인 규칙을 정의하는 원형 데이터
+    - 타입: FIXED (정액 할인) / RATE (정률 할인)
+    - Soft delete 방식으로 관리
+- **UserCoupon**: 사용자에게 발급된 쿠폰 인스턴스
+    - 상태: AVAILABLE / USED / EXPIRED
+    - 재사용 불가 (1회 사용 후 USED 처리)
 
 
 ### 상품 및 주문 시스템 설계 원칙
@@ -81,10 +97,12 @@ Order (주문)
 
 **3. 데이터 보존 (Soft Delete)**
 - **삭제 금지**: 브랜드, 상품, 옵션 데이터는 절대 삭제하지 않습니다.
+- 쿠폰 템플릿도 Soft delete 방식으로 관리합니다.
 - **히스토리 유지**: 상품이 품절되거나 사라져도 과거의 주문 내역이나 고객의 '좋아요' 기록은 그대로 보존하여 데이터 추적성을 확보합니다.
 
 **4. 데이터 일관성 전략 (Consistency)**
 - **재고와 주문 (절대 일관성)**: 결제와 재고 차감은 **'모두 성공하거나 모두 실패'**해야 합니다. 수량 오차를 0으로 유지합니다.
+- **쿠폰과 주문 (절대 일관성)**: 쿠폰 상태 변경과 주문 생성은 하나의 트랜잭션으로 처리합니다.
 - **좋아요 수 (점진적 반영)**: 수치는 실시간으로 아주 약간의 오차가 있을 수 있으나, 시스템 부하를 줄이기 위해 비동기 방식으로 빠르게 업데이트합니다.
 
 ### 핵심 설계 의도
