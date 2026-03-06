@@ -24,14 +24,14 @@ description:
 #### 1. Transaction Boundary 분석
 다음을 순서대로 확인한다.
 - 트랜잭션 시작 지점은 어디인가?
-    - Service / Facade / 그 외 계층?
+  - Service / Facade / 그 외 계층?
 - 트랜잭션이 실제로 필요한 작업은 무엇인가?
-    - 상태 변경 (쓰기)
-    - 단순 조회
+  - 상태 변경 (쓰기)
+  - 단순 조회
 - 트랜잭션 내부에서 수행되는 작업 나열
-    - 외부 API 호출
-    - 복잡한 조회(QueryDSL)
-    - 반복문 기반 처리
+  - 외부 API 호출
+  - 복잡한 조회(QueryDSL)
+  - 반복문 기반 처리
 
 **출력 예시**
 ```markdown
@@ -77,8 +77,8 @@ OrderFacade.placeOrder()
 #### 4. Improvement Proposal (선택적 제안)
 개선안은 강제하지 않고 선택지로 제시한다.
 - 트랜잭션 분리
-    - 조회 → 쓰기 분리
-    - Facade에서 orchestration, Service는 최소 트랜잭션
+  - 조회 → 쓰기 분리
+  - Facade에서 orchestration, Service는 최소 트랜잭션
 - `@Transactional(readOnly = true)` 적용
 - DTO Projection (읽기 전용 모델) 도입
 - 외부 호출 / 이벤트 발행을 트랜잭션 외부로 이동
