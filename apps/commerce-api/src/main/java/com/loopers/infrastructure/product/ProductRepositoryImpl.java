@@ -54,6 +54,7 @@ public class ProductRepositoryImpl implements ProductRepository {
     private Sort resolveSort(ProductSortType sortType) {
         return switch (sortType) {
             case PRICE_ASC -> Sort.by(Sort.Direction.ASC, "price.value");
+            case LIKES_DESC -> Sort.by(Sort.Direction.DESC, "likeCount");
             default -> Sort.by(Sort.Direction.DESC, "createdAt");
         };
     }
