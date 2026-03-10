@@ -1,0 +1,17 @@
+ Docker 올라오면 실행 순서:
+
+  # 1. 더미 데이터 주입
+  mysql -u application -papplication application < docs/dumydata/product_dummy_data.sql
+
+  # 2. 인덱스 전 — EXPLAIN 실행 (MySQL CLI 또는 Workbench)
+  mysql -u application -papplication application < docs/performance/explain-queries.sql
+
+  # 3. 인덱스 전 — k6 부하 테스트
+  k6 run docs/performance/k6/product-list.js
+
+  # 4. 인덱스 적용
+  mysql -u application -papplication application < docs/performance/index-migration.sql
+
+  # 5. 인덱스 후 — 동일하게 재실행
+
+  결과가 나오면 index-optimization-plan.md의 표에 채워넣으면 됩니다.
