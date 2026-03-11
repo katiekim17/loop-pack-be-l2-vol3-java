@@ -1,3 +1,22 @@
+-- 삽입 방법
+-- ============================================================
+-- docker ps --MySQL 컨테이너 이름 확인 --> docker-mysql
+--
+-- docker exec -i docker-mysql-1 mysql -u application -p loopers < docs/scripts/fixture/product_performance_100k.sql
+-- or
+-- docker exec -it eb4a0a6d7bda bash
+-- ============================================================
+-- SQL 파일 실행
+-- ============================================================
+-- 파일 복사
+-- docker cp docs/scripts/fixture/product_performance_100k.sql eb4a0a6d7bda:/tmp/product_performance_100k.sql
+-- 컨테이너 접속
+-- docker exec -it eb4a0a6d7bda bash
+-- mysql 접속
+-- mysql -u application -p loopers
+-- SQL 실행 (비번 입력)
+-- source /tmp/product_performance_100k.sql
+
 -- ============================================================
 -- 상품 목록 조회 성능 테스트용 더미 데이터
 -- 총 100,000건 (Brand 20개, Product 100,000개, Stock 100,000개)
@@ -218,4 +237,4 @@ ORDER BY price_range_from;
 
 -- 실행 방법
 --
---   mysql -u application -p application < docs/dumydata/product_dummy_data.sql
+--   mysql -u application -p application < docs/dumydata/product_performance_100k.sql
