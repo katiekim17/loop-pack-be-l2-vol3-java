@@ -6,6 +6,7 @@ import com.loopers.domain.product.ProductSortType;
 import com.loopers.domain.product.ProductStatus;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -24,9 +25,12 @@ public class ProductFacade {
         return ProductDetailInfo.from(detail.product(), detail.brand(), detail.options(), detail.images());
     }
 
-    public Page<ProductListInfo> getProductList(Long brandId, String sort, int page, int size) {
+    @Cacheable(cacheNames = "productList", key = "'' + #brandId + '_' + #sort + '_' + #page + '_' + #size")
+    public ProductListPage getProductList(Long brandId, String sort, int page, int size) {
         ProductSortType sortType = ProductSortType.from(sort);
-        return productService.getProductList(brandId, sortType, CUSTOMER_VISIBLE_STATUSES, PageRequest.of(page, size))
-            .map(ProductListInfo::from);
+        return ProductListPage.from(
+            productService.getProductList(brandId, sortType, CUSTOMER_VISIBLE_STATUSES, PageRequest.of(page, size))
+                .map(ProductListInfo::from)
+        );
     }
 }

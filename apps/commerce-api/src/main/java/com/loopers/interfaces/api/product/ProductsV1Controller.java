@@ -26,6 +26,7 @@ public class ProductsV1Controller implements ProductsV1ApiSpec {
         @RequestParam(required = false, defaultValue = "20") int size
     ) {
         Page<ProductV1Dto.ProductListItemResponse> responsePage = productFacade.getProductList(brandId, sort, page, size)
+            .toPage()
             .map(ProductV1Dto.ProductListItemResponse::from);
         return ApiResponse.success(ProductV1Dto.PageResponse.from(responsePage));
     }

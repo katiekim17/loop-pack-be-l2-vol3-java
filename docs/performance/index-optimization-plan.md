@@ -270,3 +270,108 @@ new ConcurrentMapCacheManager("productList");
 
 ConcurrentHashMap 캐시는 단일 서버 + 소규모 트래픽에서는 효과적이나,
 운영 환경에서는 TTL, 분산, 모니터링을 지원하는 **Redis 캐시 도입이 필요**.
+
+---
+
+## Step 8. Redis 캐시 전환
+
+### 구현 내용
+
+| 항목 | 내용 |
+|------|------|
+| CacheManager | `RedisCacheManager` + `Jackson2JsonRedisSerializer<ProductListPage>` |
+| TTL | 5분 (`Duration.ofMinutes(5)`) |
+| 캐시 대상 | `ProductFacade.getProductList()` |
+| 캐시 키 | `productList::{brandId}_{sort}_{page}_{size}` |
+| 직렬화 | `ProductListPage` (커스텀 래퍼 레코드) |
+
+### PageImpl 직렬화 문제 및 해결
+
+`Page<ProductListInfo>`를 직접 캐시하면 역직렬화 시 실패한다.
+`PageImpl`은 Jackson이 인식할 수 있는 생성자가 없기 때문이다.
+
+```
+# Spring 공식 경고 로그
+Serializing PageImpl instances as-is is not supported,
+meaning that there is no guarantee about the stability of the resulting JSON structure!
+```
+
+**해결**: `ProductListPage` 레코드로 래핑하여 캐시에 저장하고, 컨트롤러에서 `.toPage()`로 복원.
+
+```java
+// 캐시에 저장되는 타입 (직렬화 안전)
+public record ProductListPage(List<ProductListInfo> content, int page, int size, long totalElements) {
+    public Page<ProductListInfo> toPage() {
+        return new PageImpl<>(content, PageRequest.of(page, size), totalElements);
+    }
+}
+```
+
+### Redis 동작 확인
+
+**캐시 저장 확인 (master)**
+```bash
+docker exec -it redis-master redis-cli keys "*"
+# 결과
+1) "productList::null_latest_0_5"
+```
+
+**첫 번째 호출 - cache miss → master에 SET**
+```bash
+# redis-master MONITOR 출력
+"SET" "productList::null_latest_0_5" "{\"content\":[...],\"page\":0,\"size\":5,\"totalElements\":80000}" "PX" "300000"
+```
+
+- JSON에 `@class` 타입 정보 없음 (타입 고정 직렬화 사용)
+- `"PX" "300000"` → TTL 300,000ms = 5분
+
+**두 번째 호출 - cache hit → replica에서 GET**
+```bash
+# redis-readonly MONITOR 출력
+"GET" "productList::null_latest_0_5"
+```
+
+redis-master MONITOR에는 GET이 보이지 않음.
+`ReadFrom.REPLICA_PREFERRED` 설정으로 **읽기는 replica(6380)로 라우팅**되기 때문.
+
+### k6 부하 테스트 결과 (Redis 캐시 적용)
+
+> 실행 조건: VU 50, 30s / 데이터: 81,000건
+
+| UC | median (ms) | avg (ms) | p95 (ms) | p99 (ms) | rps |
+|----|-------------|----------|----------|----------|-----|
+| UC-1 | 55 | 272 | 1658 | 4426 | 145 |
+| UC-2 | 57 | 295 | 518 | 6137 | 145 |
+| UC-3 | 53 | 225 | 430 | 4358 | 145 |
+| UC-4 | 53 | 213 | 456 | 3596 | 145 |
+| UC-5 | 52 | 171 | 767 | 2571 | 145 |
+
+### ConcurrentHashMap vs Redis 캐시 비교
+
+| UC | ConcurrentHashMap avg | Redis avg | ConcurrentHashMap p99 | Redis p99 |
+|----|----------------------|-----------|-----------------------|-----------|
+| UC-1 | 124ms | 272ms | 4002ms | 4426ms |
+| UC-2 | 132ms | 295ms | 4992ms | 6137ms |
+| UC-3 | 50ms | 225ms | 2166ms | 4358ms |
+| UC-4 | 46ms | 213ms | 1851ms | 3596ms |
+| UC-5 | 54ms | 171ms | 2008ms | 2571ms |
+
+rps: ConcurrentHashMap 271 → Redis **145**
+
+**avg/rps 기준으로는 ConcurrentHashMap이 더 빠르다.**
+Redis는 네트워크 I/O가 추가되기 때문에 순수 응답 속도는 느릴 수 있다.
+그러나 Redis는 TTL, 분산 환경, 모니터링을 지원하므로 운영 환경에서는 Redis가 적합하다.
+
+---
+
+### 쓰기/읽기 분리 구조
+
+```
+캐시 미스 (첫 호출)
+  → DB 조회 → ProductListPage 생성
+  → redis-master:6379 에 SET (쓰기)
+
+캐시 히트 (이후 호출)
+  → redis-readonly:6380 에서 GET (읽기)
+  → DB 조회 없음
+```
