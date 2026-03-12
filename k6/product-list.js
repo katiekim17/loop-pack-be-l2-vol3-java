@@ -33,6 +33,7 @@ export const options = {
         'http_req_duration': ['p(95)<2000'],
         'error_rate': ['rate<0.01'],
     },
+    summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)'],
 };
 
 // 테스트에 사용할 브랜드 ID 목록 (더미 데이터 기준 1~5 = 인기 브랜드)
