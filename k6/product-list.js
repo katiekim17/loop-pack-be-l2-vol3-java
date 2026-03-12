@@ -19,11 +19,11 @@ const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 const ENDPOINT = `${BASE_URL}/api/v1/products`;
 
 // 유즈케이스별 커스텀 메트릭
-const uc1Duration = new Trend('uc1_전체_최신순');
-const uc2Duration = new Trend('uc2_전체_좋아요순');
-const uc3Duration = new Trend('uc3_브랜드필터_최신순');
-const uc4Duration = new Trend('uc4_브랜드필터_좋아요순');
-const uc5Duration = new Trend('uc5_브랜드필터_가격순');
+const uc1Duration = new Trend('uc1_all_latest');
+const uc2Duration = new Trend('uc2_all_likes');
+const uc3Duration = new Trend('uc3_brand_latest');
+const uc4Duration = new Trend('uc4_brand_likes');
+const uc5Duration = new Trend('uc5_brand_price');
 const errorRate  = new Rate('error_rate');
 
 export const options = {

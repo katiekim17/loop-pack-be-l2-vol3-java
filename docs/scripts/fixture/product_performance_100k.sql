@@ -9,11 +9,11 @@
 -- SQL 파일 실행
 -- ============================================================
 -- 파일 복사
--- docker cp docs/scripts/fixture/product_performance_100k.sql eb4a0a6d7bda:/tmp/product_performance_100k.sql
+-- docker cp docs/scripts/fixture/product_performance_100k.sql docker-mysql-1:/tmp/product_performance_100k.sql
 -- 컨테이너 접속
--- docker exec -it eb4a0a6d7bda bash
+-- docker exec -it docker-mysql-1 bash
 -- mysql 접속
--- mysql -u application -p loopers
+-- mysql --default-character-set=utf8mb4 -u application -p loopers
 -- SQL 실행 (비번 입력)
 -- source /tmp/product_performance_100k.sql
 
@@ -32,6 +32,8 @@
 -- ============================================================
 -- 2. Brand 20건 INSERT
 -- ============================================================
+SET NAMES utf8mb4;
+
 INSERT INTO brand (name, status, created_at, updated_at)
 VALUES
   ('나이키',        'ACTIVE', NOW(), NOW()),
