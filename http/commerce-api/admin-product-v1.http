@@ -1,0 +1,60 @@
+### 상품 등록 (성공 → 201, ProductHistory 1건 자동 생성)
+POST {{commerce-api}}/api-admin/v1/products
+X-Loopers-Ldap: loopers.admin
+Content-Type: application/json
+
+{
+  "brandId": 1,
+  "name": "에어맥스 90",
+  "price": 150000,
+  "description": "클래식 러닝화",
+  "thumbnailImageUrl": "https://example.com/airmax90.png"
+}
+
+### 상품 등록 (존재하지 않는 브랜드 → 404)
+POST {{commerce-api}}/api-admin/v1/products
+X-Loopers-Ldap: loopers.admin
+Content-Type: application/json
+
+{
+  "brandId": 999999,
+  "name": "에어맥스 90",
+  "price": 150000,
+  "description": "클래식 러닝화"
+}
+
+### 상품 정보 수정 (성공 → 200, ProductHistory 누적)
+PUT {{commerce-api}}/api-admin/v1/products/1
+X-Loopers-Ldap: loopers.admin
+Content-Type: application/json
+
+{
+  "brandId": 1,
+  "name": "에어맥스 90 리미티드",
+  "price": 180000,
+  "description": "한정판 러닝화"
+}
+
+### 상품 변경 이력 조회 (성공 → 200, content + totalElements)
+GET {{commerce-api}}/api-admin/v1/products/1/history?page=0&size=20
+X-Loopers-Ldap: loopers.admin
+
+### 상품 상세 조회 (성공 → 200, PENDING/INACTIVE 포함 모든 상태 조회 가능)
+GET {{commerce-api}}/api-admin/v1/products/1
+X-Loopers-Ldap: loopers.admin
+
+### 상품 목록 조회 - 전체 (성공 → 200)
+GET {{commerce-api}}/api-admin/v1/products?page=0&size=20
+X-Loopers-Ldap: loopers.admin
+
+### 상품 목록 조회 - brandId 필터
+GET {{commerce-api}}/api-admin/v1/products?brandId=1&page=0&size=20
+X-Loopers-Ldap: loopers.admin
+
+### 상품 목록 조회 - status 필터
+GET {{commerce-api}}/api-admin/v1/products?status=ACTIVE&page=0&size=20
+X-Loopers-Ldap: loopers.admin
+
+### 상품 비활성화 (성공 → 204)
+DELETE {{commerce-api}}/api-admin/v1/products/1
+X-Loopers-Ldap: loopers.admin
