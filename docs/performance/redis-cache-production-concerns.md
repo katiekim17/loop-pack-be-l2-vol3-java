@@ -1,6 +1,6 @@
 # Redis 캐시 운영 고려사항
 
-> 상품 목록 조회 Redis 캐시 도입 이후, 실제 운영 환경(특히 트래픽 급증 시)에서 발생할 수 있는 문제와 대응 전략을 정리한다.
+> 상품 목록/상세 조회 Redis 캐시 도입 이후, 실제 운영 환경(특히 트래픽 급증 시)에서 발생할 수 있는 문제와 대응 전략을 정리한다.
 
 ---
 
@@ -10,10 +10,24 @@
 Client → Spring App (@Cacheable) → Redis → (miss 시) MySQL
 ```
 
-- 캐시 키: `productList::null_latest_0_20`
-- TTL: 5분
-- 직렬화: `Jackson2JsonRedisSerializer<ProductListPage>`
-- Redis: Master 1대 + Replica 1대
+| 캐시 이름 | 캐시 키 형식 | TTL | 직렬화 타입 | 무효화 트리거 |
+|-----------|-------------|-----|------------|--------------|
+| `productList` | `productList::{brandId}_{sort}_{page}_{size}` | 5분 | `ProductListPage` | 상품 생성/수정/비활성화 (allEntries) |
+| `productDetail` | `productDetail::{productId}` | 5분 | `ProductDetailInfo` | 상품 수정/비활성화 (단건 evict) |
+
+- Redis: Master 1대 + Replica 1대 (읽기: REPLICA_PREFERRED, 쓰기: MASTER)
+- Redis 장애 시: `CacheErrorHandler`가 예외를 삼키고 DB로 폴백 (서비스 정상 유지)
+
+### 무효화 전략 비교
+
+| 연산 | productList | productDetail |
+|------|------------|---------------|
+| 상품 생성 | allEntries evict | — (캐시 없음) |
+| 상품 수정 | allEntries evict | 해당 productId 단건 evict |
+| 상품 비활성화 | allEntries evict | 해당 productId 단건 evict |
+| 좋아요 등록/취소 | evict 없음 | evict 없음 |
+
+> **좋아요 동기화 트레이드오프**: `likeCount`는 두 캐시 모두에 포함되어 있으나, 좋아요 등록/취소마다 evict하면 캐시 효과가 없어진다. TTL 5분 내 근사값을 허용하는 것으로 설계했다.
 
 ---
 

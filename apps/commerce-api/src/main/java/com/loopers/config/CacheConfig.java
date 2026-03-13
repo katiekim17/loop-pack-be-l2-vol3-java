@@ -1,8 +1,10 @@
 package com.loopers.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.loopers.application.product.ProductDetailInfo;
 import com.loopers.application.product.ProductListPage;
 import java.time.Duration;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
@@ -25,17 +27,23 @@ public class CacheConfig implements CachingConfigurer {
     @Primary
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
-        Jackson2JsonRedisSerializer<ProductListPage> serializer =
-            new Jackson2JsonRedisSerializer<>(objectMapper, ProductListPage.class);
-
-        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+        RedisCacheConfiguration productListConfig = RedisCacheConfiguration.defaultCacheConfig()
             .entryTtl(Duration.ofMinutes(5))
-            .serializeValuesWith(
-                RedisSerializationContext.SerializationPair.fromSerializer(serializer)
-            );
+            .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
+                new Jackson2JsonRedisSerializer<>(objectMapper, ProductListPage.class)
+            ));
+
+        RedisCacheConfiguration productDetailConfig = RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofMinutes(5))
+            .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
+                new Jackson2JsonRedisSerializer<>(objectMapper, ProductDetailInfo.class)
+            ));
 
         return RedisCacheManager.builder(connectionFactory)
-            .cacheDefaults(config)
+            .withInitialCacheConfigurations(Map.of(
+                "productList", productListConfig,
+                "productDetail", productDetailConfig
+            ))
             .build();
     }
 

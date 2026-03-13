@@ -20,6 +20,7 @@ public class ProductFacade {
 
     private final ProductService productService;
 
+    @Cacheable(cacheNames = "productDetail", key = "#productId")
     public ProductDetailInfo getProductDetail(Long productId) {
         ProductDetail detail = productService.getProductDetail(productId);
         return ProductDetailInfo.from(detail.product(), detail.brand(), detail.options(), detail.images());

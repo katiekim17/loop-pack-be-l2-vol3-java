@@ -13,6 +13,7 @@ import com.loopers.support.error.ErrorType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -40,7 +41,10 @@ public class AdminProductFacade {
         return AdminProductInfo.from(product);
     }
 
-    @CacheEvict(cacheNames = "productList", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "productList", allEntries = true),
+        @CacheEvict(cacheNames = "productDetail", key = "#productId")
+    })
     @Transactional
     public AdminProductInfo updateProduct(Long productId, Long brandId, String name, Long price, String description, String thumbnailImageUrl) {
         brandRepository.findById(brandId)
@@ -55,7 +59,10 @@ public class AdminProductFacade {
         return AdminProductInfo.from(product);
     }
 
-    @CacheEvict(cacheNames = "productList", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "productList", allEntries = true),
+        @CacheEvict(cacheNames = "productDetail", key = "#productId")
+    })
     @Transactional
     public void deactivateProduct(Long productId) {
         Product product = productRepository.findById(productId)
