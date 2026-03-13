@@ -172,7 +172,54 @@ Master 장애
 
 ### 대응 방안
 
-#### 방법 A. Redis Sentinel
+#### 방법 A. CacheErrorHandler (즉시 적용 완료)
+
+Redis 연결 실패 시 예외를 삼켜서 DB 조회로 자동 폴백한다.
+
+```java
+// CacheConfig.java
+@Configuration
+public class CacheConfig implements CachingConfigurer {
+
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new CacheErrorHandler() {
+            @Override
+            public void handleCacheGetError(RuntimeException e, Cache cache, Object key) {
+                log.warn("[Cache] GET 실패 - cache={}, key={}, error={}", cache.getName(), key, e.getMessage());
+                // 예외를 삼킴 → 캐시 미스로 처리 → 실제 메서드(DB 조회)로 폴백
+            }
+
+            @Override
+            public void handleCachePutError(RuntimeException e, Cache cache, Object key, Object value) {
+                log.warn("[Cache] PUT 실패 - cache={}, key={}, error={}", cache.getName(), key, e.getMessage());
+                // 저장 실패해도 응답은 정상 반환
+            }
+
+            @Override
+            public void handleCacheEvictError(RuntimeException e, Cache cache, Object key) {
+                log.warn("[Cache] EVICT 실패 - cache={}, key={}, error={}", cache.getName(), key, e.getMessage());
+                // 무효화 실패 → stale 캐시가 TTL까지 남을 수 있음
+            }
+
+            @Override
+            public void handleCacheClearError(RuntimeException e, Cache cache) {
+                log.warn("[Cache] CLEAR 실패 - cache={}, error={}", cache.getName(), e.getMessage());
+            }
+        };
+    }
+}
+```
+
+| 상황 | 결과 |
+|------|------|
+| Redis 다운 중 GET | 예외 삼킴 → DB 조회로 폴백, 응답 정상 |
+| Redis 다운 중 PUT | 예외 삼킴 → 캐시 저장 실패하지만 응답 정상 |
+| Redis 다운 중 EVICT | 예외 삼킴 → stale 캐시 잔존 (최대 TTL 5분) |
+
+> **주의**: EVICT 실패가 가장 위험하다. 상품이 수정됐는데 무효화에 실패하면 최대 5분간 구버전 데이터가 노출된다. TTL 전략으로 감수하는 트레이드오프.
+
+#### 방법 B. Redis Sentinel
 
 자동 failover를 지원하며, Spring Data Redis에서 기본 지원한다.
 
@@ -339,7 +386,8 @@ Phase 1. 즉시 (서비스 영향 직결)
 
 Phase 2. 단기 (안정성)
 ├── Redis Sentinel 구성              → SPOF 제거
-├── Circuit Breaker (Resilience4j)   → Redis 장애 시 fallback
+├── CacheErrorHandler 적용 ✅        → Redis 장애 시 DB 폴백 (적용 완료)
+├── Circuit Breaker (Resilience4j)   → Redis 장애 감지 + 자동 차단
 └── Cache Warm-up                    → 배포 직후 DB 스파이크 방지
 
 Phase 3. 중장기 (성능 고도화)
