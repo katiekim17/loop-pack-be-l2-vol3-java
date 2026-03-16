@@ -246,6 +246,48 @@ class ProductsV1ApiE2ETest {
             );
         }
 
+        @DisplayName("sort=likes_desc 파라미터를 주면, likeCount 내림차순으로 반환한다.")
+        @Test
+        void returnsProductsSortedByLikeCountDesc_whenSortParamProvided() {
+            // arrange
+            Brand brand = brandJpaRepository.save(new Brand("나이키", null, null));
+
+            Product lowLikeProduct = new Product(brand.getId(), "좋아요 낮은 상품", new Money(100000L), null);
+            lowLikeProduct.activate();
+            productJpaRepository.save(lowLikeProduct);
+
+            Product highLikeProduct = new Product(brand.getId(), "좋아요 높은 상품", new Money(100000L), null);
+            highLikeProduct.activate();
+            for (int i = 0; i < 10; i++) {
+                highLikeProduct.incrementLikeCount();
+            }
+            productJpaRepository.save(highLikeProduct);
+
+            productOptionJpaRepository.save(new ProductOption(lowLikeProduct.getId(), "S", new Money(100000L), 5L));
+            productOptionJpaRepository.save(new ProductOption(highLikeProduct.getId(), "S", new Money(100000L), 5L));
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT + "?sort=likes_desc",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> {
+                    Map<String, Object> data = response.getBody().data();
+                    List<Map<String, Object>> content = (List<Map<String, Object>>) data.get("content");
+                    assertThat(content).hasSize(2);
+                    long firstLikeCount = ((Number) content.get(0).get("likeCount")).longValue();
+                    long secondLikeCount = ((Number) content.get(1).get("likeCount")).longValue();
+                    assertThat(firstLikeCount).isGreaterThanOrEqualTo(secondLikeCount);
+                }
+            );
+        }
+
         @DisplayName("상품이 없으면, 빈 content를 반환한다.")
         @Test
         void returnsEmptyContent_whenNoProductsExist() {

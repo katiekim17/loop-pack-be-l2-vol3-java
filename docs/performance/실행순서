@@ -1,0 +1,17 @@
+ # 1. 인프라 기동
+  docker-compose -f docker/infra-compose.yml up
+
+  # 2. 더미 데이터 주입 (10만 건)
+  mysql -h 127.0.0.1 -P 3307 -u application -p application application \
+    < docs/scripts/fixture/product_performance_100k.sql
+
+  # 3. 인덱스 전 — EXPLAIN ANALYZE 실행 → 결과 기록
+  mysql ... < docs/performance/explain-queries.sql
+
+  # 4. 인덱스 전 — k6 부하 테스트
+  k6 run k6/product-list.js
+
+  # 5. 인덱스 적용
+  mysql ... < docs/performance/index-migration.sql
+
+  # 6. 인덱스 후 — EXPLAIN + k6 재실행 → 결과 비교

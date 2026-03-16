@@ -4,8 +4,10 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.cache.annotation.EnableCaching;
 import java.util.TimeZone;
 
+@EnableCaching
 @ConfigurationPropertiesScan
 @SpringBootApplication
 public class CommerceApiApplication {

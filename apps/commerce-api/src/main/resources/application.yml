@@ -23,6 +23,10 @@ spring:
       - redis.yml
       - logging.yml
       - monitoring.yml
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
 
 springdoc:
   use-fqn: true

@@ -4,13 +4,16 @@ import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.domain.product.ProductSortType;
 import com.loopers.domain.product.ProductStatus;
+import com.loopers.domain.product.QProduct;
+import com.querydsl.core.BooleanBuilder;
+import com.querydsl.core.types.OrderSpecifier;
+import com.querydsl.jpa.impl.JPAQueryFactory;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 @RequiredArgsConstructor
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Component;
 public class ProductRepositoryImpl implements ProductRepository {
 
     private final ProductJpaRepository productJpaRepository;
+    private final JPAQueryFactory queryFactory;
 
     @Override
     public Product save(Product product) {
@@ -41,20 +45,46 @@ public class ProductRepositoryImpl implements ProductRepository {
 
     @Override
     public Page<Product> findAll(Long brandId, ProductSortType sortType, Pageable pageable) {
-        Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), resolveSort(sortType));
-        return productJpaRepository.findAllByBrandIdFilter(brandId, sortedPageable);
+        return findAll(brandId, sortType, null, pageable);
     }
 
     @Override
     public Page<Product> findAll(Long brandId, ProductSortType sortType, List<ProductStatus> statuses, Pageable pageable) {
-        Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), resolveSort(sortType));
-        return productJpaRepository.findAllByStatusFilter(brandId, statuses, sortedPageable);
+        QProduct product = QProduct.product;
+        BooleanBuilder where = new BooleanBuilder();
+
+        if (brandId != null) {
+            where.and(product.brandId.eq(brandId));
+        }
+        if (statuses != null && !statuses.isEmpty()) {
+            where.and(product.status.in(statuses));
+        }
+
+        OrderSpecifier<?> order = resolveOrderSpecifier(sortType);
+
+        List<Product> content = queryFactory
+            .selectFrom(product)
+            .where(where)
+            .orderBy(order)
+            .offset(pageable.getOffset())
+            .limit(pageable.getPageSize())
+            .fetch();
+
+        Long total = queryFactory
+            .select(product.count())
+            .from(product)
+            .where(where)
+            .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
     }
 
-    private Sort resolveSort(ProductSortType sortType) {
+    private OrderSpecifier<?> resolveOrderSpecifier(ProductSortType sortType) {
+        QProduct product = QProduct.product;
         return switch (sortType) {
-            case PRICE_ASC -> Sort.by(Sort.Direction.ASC, "price.value");
-            default -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case PRICE_ASC -> product.price.value.asc();
+            case LIKES_DESC -> product.likeCount.desc();
+            default -> product.createdAt.desc();
         };
     }
 }

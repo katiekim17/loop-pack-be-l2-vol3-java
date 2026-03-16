@@ -10,10 +10,25 @@ import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "product")
+@Table(
+    name = "product",
+    indexes = {
+        // UC-1: 전체 조회 + 최신순
+        @Index(name = "idx_product_status_created", columnList = "status, created_at DESC"),
+        // UC-2: 전체 조회 + 좋아요순
+        @Index(name = "idx_product_status_like", columnList = "status, like_count DESC"),
+        // UC-3: 브랜드 필터 + 최신순
+        @Index(name = "idx_product_brand_status_created", columnList = "brand_id, status, created_at DESC"),
+        // UC-4: 브랜드 필터 + 좋아요순
+        @Index(name = "idx_product_brand_status_like", columnList = "brand_id, status, like_count DESC"),
+        // UC-5: 브랜드 필터 + 가격 오름차순
+        @Index(name = "idx_product_brand_status_price", columnList = "brand_id, status, price ASC"),
+    }
+)
 public class Product extends BaseEntity {
 
     @Column(name = "brand_id", nullable = false)
