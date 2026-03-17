@@ -23,6 +23,22 @@ spring:
       - redis.yml
       - logging.yml
       - monitoring.yml
+resilience4j:
+  circuitbreaker:
+    instances:
+      pgCircuit:
+        sliding-window-size: 10
+        failure-rate-threshold: 50       # 실패율이 50% 넘으면 Open
+        wait-duration-in-open-state: 10s # Open 상태 유지 시간
+        permitted-number-of-calls-in-half-open-state: 2
+        slow-call-duration-threshold: 2s
+        slow-call-rate-threshold: 50
+  retry:
+    instances:
+      pgRetry:
+        max-attempts: 3
+        wait-duration: 1s
+        fail-after-max-attempts: true
 logging:
   level:
     org.hibernate.SQL: DEBUG
