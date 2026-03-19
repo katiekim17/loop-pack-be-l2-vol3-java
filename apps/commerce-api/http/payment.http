@@ -1,0 +1,57 @@
+### 결제 API E2E 시나리오
+### PG 시뮬레이터가 실행 중인 상태에서 테스트 (docker compose 또는 별도 실행)
+### 기본 URL: http://localhost:8080
+
+@baseUrl = http://localhost:8080
+@loginId = testuser
+@password = Test1234!
+
+### 1. 결제 (정상)
+POST {{baseUrl}}/api/v1/payments
+Content-Type: application/json
+X-Loopers-LoginId: {{loginId}}
+X-Loopers-LoginPw: {{password}}
+
+{
+  "orderId": 1,
+  "cardType": "SAMSUNG",
+  "cardNo": "1234-5678-9012-3456"
+}
+
+###
+
+### 2. 결제 콜백 (PG 시뮬레이터 → 우리 서버)
+### PENDING 결제를 COMPLETED 로 업데이트
+POST {{baseUrl}}/api/v1/payments/callback
+Content-Type: application/json
+
+{
+  "transactionId": "txn-from-pg-001",
+  "orderId": 1,
+  "success": true
+}
+
+###
+
+### 3. 결제 동기화 (PENDING 결제 수동 동기화)
+POST {{baseUrl}}/api/v1/payments/1/sync
+Content-Type: application/json
+X-Loopers-LoginId: {{loginId}}
+X-Loopers-LoginPw: {{password}}
+
+###
+
+### 4. 결제 실패 시나리오 (PG 서킷 OPEN 이후 빠른 실패)
+### - 서킷브레이커가 OPEN 상태일 때 요청
+POST {{baseUrl}}/api/v1/payments
+Content-Type: application/json
+X-Loopers-LoginId: {{loginId}}
+X-Loopers-LoginPw: {{password}}
+
+{
+  "orderId": 2,
+  "cardType": "HYUNDAI",
+  "cardNo": "9876-5432-1098-7654"
+}
+
+###

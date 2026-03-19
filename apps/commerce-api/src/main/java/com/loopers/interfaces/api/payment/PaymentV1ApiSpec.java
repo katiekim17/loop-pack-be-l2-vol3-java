@@ -3,6 +3,7 @@ package com.loopers.interfaces.api.payment;
 import com.loopers.interfaces.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 
@@ -14,5 +15,12 @@ public interface PaymentV1ApiSpec {
         @RequestHeader("X-Loopers-LoginId") String loginId,
         @RequestHeader("X-Loopers-LoginPw") String password,
         @RequestBody PaymentV1Dto.PayRequest request
+    );
+
+    @Operation(summary = "결제 동기화", description = "PENDING 결제를 PG 상태 조회 후 동기화한다.")
+    ApiResponse<PaymentV1Dto.PayResponse> sync(
+        @RequestHeader("X-Loopers-LoginId") String loginId,
+        @RequestHeader("X-Loopers-LoginPw") String password,
+        @PathVariable Long orderId
     );
 }

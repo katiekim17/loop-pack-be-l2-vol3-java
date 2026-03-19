@@ -2,9 +2,16 @@ package com.loopers.interfaces.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.common.Money;
+import com.loopers.domain.payment.CardType;
+import com.loopers.domain.payment.ExternalPaymentClient;
+import com.loopers.domain.payment.ExternalPaymentResponse;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.stock.Stock;
 import com.loopers.infrastructure.brand.BrandJpaRepository;
@@ -20,6 +27,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -36,6 +44,9 @@ class PaymentV1ApiE2ETest {
     private static final String USERS_ENDPOINT = "/api/v1/users";
     private static final String LOGIN_ID = "testuser";
     private static final String PASSWORD = "Test1234!";
+
+    @MockBean
+    private ExternalPaymentClient externalPaymentClient;
 
     private final TestRestTemplate testRestTemplate;
     private final DatabaseCleanUp databaseCleanUp;
@@ -60,6 +71,9 @@ class PaymentV1ApiE2ETest {
 
     @BeforeEach
     void setUp() {
+        when(externalPaymentClient.pay(anyLong(), any(CardType.class), anyString(), anyLong()))
+            .thenReturn(new ExternalPaymentResponse("txn-test-001", true));
+
         Map<String, String> signUpRequest = Map.of(
             "loginId", LOGIN_ID,
             "password", PASSWORD,
@@ -231,6 +245,40 @@ class PaymentV1ApiE2ETest {
 
             // assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        }
+
+        @DisplayName("PG 타임아웃 시 PENDING 상태의 결제가 저장되고, 201 Created를 반환한다.")
+        @Test
+        void returnsPending_whenPgTimesOut() {
+            // arrange
+            Long orderId = createOrder();
+            when(externalPaymentClient.pay(anyLong(), any(CardType.class), anyString(), anyLong()))
+                .thenThrow(new RuntimeException("Connection timed out"));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-LoginId", LOGIN_ID);
+            headers.set("X-Loopers-LoginPw", PASSWORD);
+            headers.set("Content-Type", "application/json");
+
+            Map<String, Object> request = Map.of(
+                "orderId", orderId,
+                "cardType", "SAMSUNG",
+                "cardNo", "1234-5678-9814-1451"
+            );
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                PAYMENT_ENDPOINT,
+                HttpMethod.POST,
+                new HttpEntity<>(request, headers),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED),
+                () -> assertThat(response.getBody().data().get("status")).isEqualTo("PENDING")
+            );
         }
     }
 }

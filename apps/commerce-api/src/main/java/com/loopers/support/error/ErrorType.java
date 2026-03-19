@@ -26,7 +26,9 @@ public enum ErrorType {
     COUPON_TYPE_IMMUTABLE(HttpStatus.BAD_REQUEST, "COUPON_TYPE_IMMUTABLE", "쿠폰 타입과 값은 변경할 수 없습니다."),
 
     /** 결제 에러 */
-    ORDER_ALREADY_PAID(HttpStatus.CONFLICT, "ORDER_ALREADY_PAID", "이미 결제된 주문입니다.");
+    ORDER_ALREADY_PAID(HttpStatus.CONFLICT, "ORDER_ALREADY_PAID", "이미 결제된 주문입니다."),
+    PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "PAYMENT_IN_PROGRESS", "결제가 진행 중입니다. 잠시 후 확인해주세요."),
+    PG_CIRCUIT_OPEN(HttpStatus.SERVICE_UNAVAILABLE, "PG_CIRCUIT_OPEN", "결제 시스템이 일시적으로 사용 불가합니다.");
 
     private final HttpStatus status;
     private final String code;

@@ -11,21 +11,44 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
-    private final ExternalPaymentClient externalPaymentClient;
 
     @Transactional
-    public Payment pay(Long orderId, Long memberId, CardType cardType, String cardNo, long amount) {
-        if (paymentRepository.findByOrderId(orderId).isPresent()) {
+    public Payment savePending(Long orderId, Long memberId, CardType cardType, String cardNo, long amount) {
+        paymentRepository.findByOrderId(orderId).ifPresent(existing -> {
+            if (existing.getStatus() == PaymentStatus.PENDING) {
+                throw new CoreException(ErrorType.PAYMENT_IN_PROGRESS);
+            }
             throw new CoreException(ErrorType.ORDER_ALREADY_PAID);
-        }
+        });
+        Payment payment = new Payment(orderId, memberId, cardType, cardNo, amount, PaymentStatus.PENDING, null);
+        return paymentRepository.save(payment);
+    }
 
-        // ⚠️ Option 1: 트랜잭션 내부에서 외부 결제 시스템 호출
-        // 외부 호출 지연 시 DB 커넥션을 점유하고, 외부 성공 후 내부 실패 시 정합성이 깨짐
-        ExternalPaymentResponse response = externalPaymentClient.pay(orderId, cardType, cardNo, amount);
-
+    @Transactional
+    public Payment saveResult(ExternalPaymentResponse response, Long orderId, Long memberId, CardType cardType, String cardNo, long amount) {
+        paymentRepository.findByOrderId(orderId).ifPresent(existing -> {
+            if (existing.getStatus() == PaymentStatus.PENDING) {
+                throw new CoreException(ErrorType.PAYMENT_IN_PROGRESS);
+            }
+            throw new CoreException(ErrorType.ORDER_ALREADY_PAID);
+        });
         PaymentStatus status = response.success() ? PaymentStatus.COMPLETED : PaymentStatus.FAILED;
         Payment payment = new Payment(orderId, memberId, cardType, cardNo, amount, status, response.transactionId());
+        return paymentRepository.save(payment);
+    }
 
+    @Transactional
+    public Payment updateByCallback(String transactionId, Long orderId, boolean success) {
+        Payment payment = paymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "존재하지 않는 결제입니다."));
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            return payment;
+        }
+        if (success) {
+            payment.complete(transactionId);
+        } else {
+            payment.fail();
+        }
         return paymentRepository.save(payment);
     }
 }

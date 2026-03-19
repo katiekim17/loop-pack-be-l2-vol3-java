@@ -5,6 +5,7 @@ import com.loopers.application.payment.PaymentInfo;
 import com.loopers.interfaces.api.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -28,6 +29,18 @@ public class PaymentV1Controller implements PaymentV1ApiSpec {
         @RequestBody PaymentV1Dto.PayRequest request
     ) {
         PaymentInfo info = paymentFacade.pay(loginId, password, request.orderId(), request.cardType(), request.cardNo());
+        return ApiResponse.success(PaymentV1Dto.PayResponse.from(info));
+    }
+
+    @PostMapping("/{orderId}/sync")
+    @ResponseStatus(HttpStatus.OK)
+    @Override
+    public ApiResponse<PaymentV1Dto.PayResponse> sync(
+            @RequestHeader("X-Loopers-LoginId") String loginId,
+            @RequestHeader("X-Loopers-LoginPw") String password,
+            @PathVariable Long orderId
+    ) {
+        PaymentInfo info = paymentFacade.syncPayment(loginId, password, orderId);
         return ApiResponse.success(PaymentV1Dto.PayResponse.from(info));
     }
 }

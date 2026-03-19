@@ -23,6 +23,10 @@ spring:
       - redis.yml
       - logging.yml
       - monitoring.yml
+pg:
+  simulator:
+    url: http://localhost:8090
+
 resilience4j:
   circuitbreaker:
     instances:

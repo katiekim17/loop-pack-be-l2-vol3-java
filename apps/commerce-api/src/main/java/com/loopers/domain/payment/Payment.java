@@ -88,4 +88,17 @@ public class Payment extends BaseEntity {
     public String getExternalTransactionId() {
         return externalTransactionId;
     }
+
+    public boolean isCompleted() {
+        return status == PaymentStatus.COMPLETED;
+    }
+
+    public void complete(String transactionId) {
+        this.status = PaymentStatus.COMPLETED;
+        this.externalTransactionId = transactionId;
+    }
+
+    public void fail() {
+        this.status = PaymentStatus.FAILED;
+    }
 }
