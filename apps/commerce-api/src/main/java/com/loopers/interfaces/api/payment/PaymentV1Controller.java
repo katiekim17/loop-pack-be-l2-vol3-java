@@ -30,4 +30,10 @@ public class PaymentV1Controller implements PaymentV1ApiSpec {
         PaymentInfo info = paymentFacade.pay(loginId, password, request.orderId(), request.cardType(), request.cardNo());
         return ApiResponse.success(PaymentV1Dto.PayResponse.from(info));
     }
+
+    @PostMapping("/callback")
+    @ResponseStatus(HttpStatus.OK)
+    public void callback(@RequestBody PaymentV1Dto.CallbackRequest request) {
+        paymentFacade.handleCallback(Long.parseLong(request.orderId()), request.transactionId(), request.success());
+    }
 }

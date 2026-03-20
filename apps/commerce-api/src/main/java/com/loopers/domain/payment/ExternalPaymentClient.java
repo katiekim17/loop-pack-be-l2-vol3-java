@@ -2,5 +2,7 @@ package com.loopers.domain.payment;
 
 public interface ExternalPaymentClient {
 
-    ExternalPaymentResponse pay(Long orderId, CardType cardType, String cardNo, long amount);
+    void requestPayment(Long orderId, CardType cardType, String cardNo, long amount, String callbackUrl);
+
+    ExternalPaymentResponse getPaymentByOrderId(Long orderId);
 }

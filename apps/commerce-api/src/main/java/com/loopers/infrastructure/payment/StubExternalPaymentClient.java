@@ -4,14 +4,20 @@ import com.loopers.domain.payment.CardType;
 import com.loopers.domain.payment.ExternalPaymentClient;
 import com.loopers.domain.payment.ExternalPaymentResponse;
 import java.util.UUID;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+@Profile("test")
 @Component
 public class StubExternalPaymentClient implements ExternalPaymentClient {
 
     @Override
-    public ExternalPaymentResponse pay(Long orderId, CardType cardType, String cardNo, long amount) {
-        // 외부 결제 시스템 연동 전 Stub 구현: 항상 성공 응답을 반환한다.
+    public void requestPayment(Long orderId, CardType cardType, String cardNo, long amount, String callbackUrl) {
+        // Stub: 실제 PG 호출 없이 아무것도 하지 않음 (콜백은 테스트에서 직접 호출)
+    }
+
+    @Override
+    public ExternalPaymentResponse getPaymentByOrderId(Long orderId) {
         return new ExternalPaymentResponse(UUID.randomUUID().toString(), true);
     }
 }

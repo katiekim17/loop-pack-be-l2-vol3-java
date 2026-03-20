@@ -39,6 +39,17 @@ resilience4j:
         max-attempts: 3
         wait-duration: 1s
         fail-after-max-attempts: true
+payment:
+  callback-url: http://localhost:8080/api/v1/payments/callback
+
+pg:
+  simulator:
+    url: http://localhost:8081
+    user-id: "135135"
+    timeout:
+      connect-ms: 3000
+      read-ms: 5000
+
 logging:
   level:
     org.hibernate.SQL: DEBUG
@@ -54,6 +65,10 @@ spring:
   config:
     activate:
       on-profile: local, test
+
+pg:
+  simulator:
+    url: http://localhost:18081
 
 ---
 spring:
