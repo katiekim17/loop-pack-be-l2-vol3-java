@@ -44,7 +44,7 @@ payment:
 
 pg:
   simulator:
-    url: http://localhost:8081
+    url: http://localhost:8082
     user-id: "135135"
     timeout:
       connect-ms: 3000
@@ -68,7 +68,7 @@ spring:
 
 pg:
   simulator:
-    url: http://localhost:18081
+    url: http://localhost:8082
 
 ---
 spring:
