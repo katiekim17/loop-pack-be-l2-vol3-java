@@ -1,5 +1,6 @@
 package com.loopers.application.order;
 
+import com.loopers.domain.alert.AlertNotifier;
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.common.Quantity;
 import com.loopers.domain.coupon.CouponDiscount;
@@ -22,6 +23,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @RequiredArgsConstructor
 @Component
@@ -32,9 +35,18 @@ public class OrderFacade {
     private final OrderService orderService;
     private final OrderItemRepository orderItemRepository;
     private final UserCouponService userCouponService;
+    private final AlertNotifier alertNotifier;
 
     @Transactional
     public OrderInfo createOrder(String loginId, String password, List<OrderV1Dto.OrderItemRequest> items, Long userCouponId) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                    alertNotifier.notify("주문 생성 실패", "주문 생성 중 오류 발생 - loginId: " + loginId);
+                }
+            }
+        });
         Users user = userService.authenticate(loginId, password);
 
         List<Long> productIds = items.stream().map(OrderV1Dto.OrderItemRequest::productId).toList();

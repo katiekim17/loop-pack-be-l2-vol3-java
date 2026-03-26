@@ -1,16 +1,20 @@
 package com.loopers.domain.payment;
 
+import com.loopers.domain.alert.AlertNotifier;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @RequiredArgsConstructor
 @Component
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
+    private final AlertNotifier alertNotifier;
 
     @Transactional
     public Payment savePending(Long orderId, Long memberId, CardType cardType, String cardNo, long amount) {
@@ -31,6 +35,14 @@ public class PaymentService {
                 throw new CoreException(ErrorType.PAYMENT_IN_PROGRESS);
             }
             throw new CoreException(ErrorType.ORDER_ALREADY_PAID);
+        });
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                    alertNotifier.notify("결제 DB 저장 실패", "PG 결제 성공 후 DB 저장 실패 - orderId: " + orderId);
+                }
+            }
         });
         PaymentStatus status = response.success() ? PaymentStatus.COMPLETED : PaymentStatus.FAILED;
         Payment payment = new Payment(orderId, memberId, cardType, cardNo, amount, status, response.transactionId());
