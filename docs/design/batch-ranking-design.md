@@ -94,8 +94,57 @@ ON DUPLICATE KEY UPDATE total_sales = VALUES(total_sales)
 
 ---
 
-## 4. 미결 사항
+## 4. Ranking API 확장
 
-- [ ] Ranking API 파라미터 설계 (`period=daily|weekly|monthly` 추가 방식)
-- [ ] 일간(Redis) / 주간·월간(MySQL MV) 저장소 이중화에 따른 `RankingRepository` 추상화 방식
-- [ ] 기존 API 하위 호환성 보장 방법
+### 파라미터 설계
+
+```
+GET /api/v1/rankings?date=20260415&period=daily&size=20&page=1
+```
+
+| 파라미터 | 타입 | 기본값 | 설명 |
+|---------|------|--------|------|
+| `date` | yyyyMMdd | 오늘 | 조회 기준 날짜 |
+| `period` | daily \| weekly \| monthly | daily | 집계 기간 |
+| `size` | int | 20 | 페이지 크기 |
+| `page` | int | 1 | 페이지 번호 (1-based) |
+
+- `period` 미입력 시 `daily` → 기존 클라이언트 하위 호환성 유지
+- `period=weekly`일 때 `date`는 해당 주 안의 임의 날짜 → `date.with(DayOfWeek.MONDAY)`로 주 시작일 계산
+
+### RankingPeriod Enum
+
+```java
+public enum RankingPeriod {
+    DAILY, WEEKLY, MONTHLY
+}
+```
+
+- `String` 대신 `enum` 사용 → 컴파일 타임 오타 방지
+- Controller 입력 시 대소문자 변환 처리 필요 (`"weekly"` → `WEEKLY`)
+
+### Repository 분리
+
+| 저장소 | 인터페이스 | 구현 |
+|--------|-----------|------|
+| 일간 | `RankingRepository` | Redis ZSET |
+| 주간 | `WeeklyRankingRepository` | MySQL mv_product_rank_weekly |
+| 월간 | `MonthlyRankingRepository` | MySQL mv_product_rank_monthly |
+
+- `RankingFacade`에서 `RankingPeriod`로 분기하여 각 Repository 호출
+
+```java
+public List<RankingInfo> getRankings(LocalDate date, RankingPeriod period, int page, int size) {
+    return switch (period) {
+        case WEEKLY -> // WeeklyRankingRepository 호출
+        case MONTHLY -> // MonthlyRankingRepository 호출
+        default -> // 기존 Redis RankingRepository 호출
+    };
+}
+```
+
+---
+
+## 5. 미결 사항
+
+- [ ] `RankingPeriod` enum을 `@RequestParam`에서 대소문자 무관하게 변환하는 방법
