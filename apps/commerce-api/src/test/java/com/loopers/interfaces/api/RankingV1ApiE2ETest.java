@@ -10,6 +10,7 @@ import com.loopers.infrastructure.brand.BrandJpaRepository;
 import com.loopers.infrastructure.product.ProductJpaRepository;
 import com.loopers.utils.DatabaseCleanUp;
 import com.loopers.utils.RedisCleanUp;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -27,6 +28,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class RankingV1ApiE2ETest {
@@ -52,10 +54,27 @@ class RankingV1ApiE2ETest {
     @Autowired
     private RedisCleanUp redisCleanUp;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @AfterEach
     void tearDown() {
         databaseCleanUp.truncateAllTables();
         redisCleanUp.truncateAll();
+    }
+
+    private void seedWeeklyMv(Long productId, LocalDate weekStart, long totalSales) {
+        jdbcTemplate.update(
+            "INSERT INTO mv_product_rank_weekly (product_id, week_start, total_sales, updated_at) VALUES (?, ?, ?, NOW())",
+            productId, weekStart, totalSales
+        );
+    }
+
+    private void seedMonthlyMv(Long productId, LocalDate monthStart, long totalSales) {
+        jdbcTemplate.update(
+            "INSERT INTO mv_product_rank_monthly (product_id, month_start, total_sales, updated_at) VALUES (?, ?, ?, NOW())",
+            productId, monthStart, totalSales
+        );
     }
 
     private void seedRankingZset(Long productId, double score) {
@@ -203,6 +222,101 @@ class RankingV1ApiE2ETest {
             assertThat(items).hasSize(2);
             assertThat(((Number) items.get(0).get("rank")).intValue()).isEqualTo(3);
             assertThat(((Number) items.get(1).get("rank")).intValue()).isEqualTo(4);
+        }
+
+        @DisplayName("period=weekly로 조회하면 mv_product_rank_weekly에서 주간 랭킹을 반환한다.")
+        @Test
+        void returnsWeeklyRanking_whenPeriodIsWeekly() {
+            // arrange
+            Brand brand = brandJpaRepository.save(new Brand("주간테스트"));
+            Product product1 = productJpaRepository.save(new Product(brand.getId(), "주간상품A", new Money(10000L), "설명"));
+            Product product2 = productJpaRepository.save(new Product(brand.getId(), "주간상품B", new Money(20000L), "설명"));
+
+            LocalDate today = LocalDate.now();
+            LocalDate weekStart = today.with(DayOfWeek.MONDAY);
+            seedWeeklyMv(product1.getId(), weekStart, 500L);
+            seedWeeklyMv(product2.getId(), weekStart, 300L);
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT + "?date=" + today.format(DATE_FORMAT) + "&period=weekly&size=20&page=1",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> {
+                    List<Map<String, Object>> items = (List<Map<String, Object>>) response.getBody().data().get("items");
+                    assertThat(items).hasSize(2);
+                    assertThat(items.get(0).get("productName")).isEqualTo("주간상품A");
+                    assertThat(((Number) items.get(0).get("rank")).intValue()).isEqualTo(1);
+                    assertThat(items.get(1).get("productName")).isEqualTo("주간상품B");
+                }
+            );
+        }
+
+        @DisplayName("period=monthly로 조회하면 mv_product_rank_monthly에서 월간 랭킹을 반환한다.")
+        @Test
+        void returnsMonthlyRanking_whenPeriodIsMonthly() {
+            // arrange
+            Brand brand = brandJpaRepository.save(new Brand("월간테스트"));
+            Product product1 = productJpaRepository.save(new Product(brand.getId(), "월간상품A", new Money(10000L), "설명"));
+            Product product2 = productJpaRepository.save(new Product(brand.getId(), "월간상품B", new Money(20000L), "설명"));
+
+            LocalDate today = LocalDate.now();
+            LocalDate monthStart = today.withDayOfMonth(1);
+            seedMonthlyMv(product1.getId(), monthStart, 1000L);
+            seedMonthlyMv(product2.getId(), monthStart, 700L);
+
+            // act
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT + "?date=" + today.format(DATE_FORMAT) + "&period=monthly&size=20&page=1",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> {
+                    List<Map<String, Object>> items = (List<Map<String, Object>>) response.getBody().data().get("items");
+                    assertThat(items).hasSize(2);
+                    assertThat(items.get(0).get("productName")).isEqualTo("월간상품A");
+                    assertThat(((Number) items.get(0).get("rank")).intValue()).isEqualTo(1);
+                    assertThat(items.get(1).get("productName")).isEqualTo("월간상품B");
+                }
+            );
+        }
+
+        @DisplayName("period 파라미터가 없으면 기본값 daily로 Redis에서 일간 랭킹을 반환한다.")
+        @Test
+        void returnsDefaultDailyRanking_whenPeriodIsAbsent() {
+            // arrange
+            Brand brand = brandJpaRepository.save(new Brand("기본테스트"));
+            Product product = productJpaRepository.save(new Product(brand.getId(), "일간상품", new Money(10000L), "설명"));
+            seedRankingZset(product.getId(), 10.0);
+
+            // act — period 파라미터 없이 호출
+            ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
+                ENDPOINT + "?date=" + LocalDate.now().format(DATE_FORMAT),
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> {
+                    List<Map<String, Object>> items = (List<Map<String, Object>>) response.getBody().data().get("items");
+                    assertThat(items).hasSize(1);
+                    assertThat(items.get(0).get("productName")).isEqualTo("일간상품");
+                }
+            );
         }
     }
 }
