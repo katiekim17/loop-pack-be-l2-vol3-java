@@ -1,0 +1,14 @@
+### 일간 랭킹 조회 (기본값 — period 생략)
+GET {{commerce-api}}/api/v1/rankings?date=20260417&size=20&page=1
+
+### 일간 랭킹 조회 (명시적 daily)
+GET {{commerce-api}}/api/v1/rankings?date=20260417&period=daily&size=20&page=1
+
+### 주간 랭킹 조회 (date가 속한 주의 월~일 기준 TOP 20)
+GET {{commerce-api}}/api/v1/rankings?date=20260417&period=weekly&size=20&page=1
+
+### 월간 랭킹 조회 (date가 속한 달 1일~말일 기준 TOP 20)
+GET {{commerce-api}}/api/v1/rankings?date=20260417&period=monthly&size=20&page=1
+
+### 랭킹 2페이지 조회
+GET {{commerce-api}}/api/v1/rankings?date=20260417&period=daily&size=10&page=2
