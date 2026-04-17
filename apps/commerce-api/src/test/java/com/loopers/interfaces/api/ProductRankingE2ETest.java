@@ -6,12 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.common.Money;
 import com.loopers.domain.product.Product;
+import com.loopers.domain.ranking.RankingMaterializedView;
 import com.loopers.infrastructure.brand.BrandJpaRepository;
 import com.loopers.infrastructure.product.ProductJpaRepository;
+import com.loopers.infrastructure.ranking.RankingMaterializedViewJpaRepository;
 import com.loopers.utils.DatabaseCleanUp;
 import com.loopers.utils.RedisCleanUp;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +22,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -31,7 +31,6 @@ import org.springframework.http.ResponseEntity;
 class ProductRankingE2ETest {
 
     private static final String PRODUCTS_ENDPOINT = "/api/v1/products";
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     @Autowired
     private TestRestTemplate testRestTemplate;
@@ -43,7 +42,7 @@ class ProductRankingE2ETest {
     private ProductJpaRepository productJpaRepository;
 
     @Autowired
-    private StringRedisTemplate redisTemplate;
+    private RankingMaterializedViewJpaRepository rankingMaterializedViewJpaRepository;
 
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
@@ -57,23 +56,21 @@ class ProductRankingE2ETest {
         redisCleanUp.truncateAll();
     }
 
-    @DisplayName("GET /api/v1/products/{productId} — ranking 필드")
+    @DisplayName("GET /api/v1/products/{productId} 의 ranking 필드")
     @Nested
     class ProductDetailRanking {
 
-        @DisplayName("오늘 랭킹이 있는 상품 조회 시, ranking 순위가 반환된다.")
+        @DisplayName("오늘 일간 랭킹에 있는 상품 조회 시 ranking 순위가 반환된다.")
         @Test
         void returnsRankingWhenProductIsRanked() {
-            // arrange
             Brand brand = brandJpaRepository.save(new Brand("나이키"));
             Product product1 = productJpaRepository.save(new Product(brand.getId(), "1위상품", new Money(50000L), "설명"));
             Product product2 = productJpaRepository.save(new Product(brand.getId(), "2위상품", new Money(30000L), "설명"));
 
-            String key = "ranking:all:" + LocalDate.now().format(DATE_FORMAT);
-            redisTemplate.opsForZSet().add(key, product1.getId().toString(), 10.0);
-            redisTemplate.opsForZSet().add(key, product2.getId().toString(), 5.0);
+            LocalDate today = LocalDate.now();
+            rankingMaterializedViewJpaRepository.save(new RankingMaterializedView("DAILY", today, product1.getId(), 10.0, 1));
+            rankingMaterializedViewJpaRepository.save(new RankingMaterializedView("DAILY", today, product2.getId(), 5.0, 2));
 
-            // act
             ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
                 PRODUCTS_ENDPOINT + "/" + product1.getId(),
                 HttpMethod.GET,
@@ -81,7 +78,6 @@ class ProductRankingE2ETest {
                 new ParameterizedTypeReference<>() {}
             );
 
-            // assert
             assertAll(
                 () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
                 () -> {
@@ -92,15 +88,12 @@ class ProductRankingE2ETest {
             );
         }
 
-        @DisplayName("오늘 랭킹이 없는 상품 조회 시, ranking은 null로 반환된다.")
+        @DisplayName("오늘 일간 랭킹에 없는 상품 조회 시 ranking 은 null로 반환된다.")
         @Test
         void returnsNullRankingWhenProductIsNotRanked() {
-            // arrange
             Brand brand = brandJpaRepository.save(new Brand("아디다스"));
             Product product = productJpaRepository.save(new Product(brand.getId(), "비인기상품", new Money(20000L), "설명"));
-            // ZSET에 등록하지 않음
 
-            // act
             ResponseEntity<ApiResponse<Map<String, Object>>> response = testRestTemplate.exchange(
                 PRODUCTS_ENDPOINT + "/" + product.getId(),
                 HttpMethod.GET,
@@ -108,7 +101,6 @@ class ProductRankingE2ETest {
                 new ParameterizedTypeReference<>() {}
             );
 
-            // assert
             assertAll(
                 () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
                 () -> {

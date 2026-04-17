@@ -1,8 +1,9 @@
 package com.loopers.job.ranking;
 
 import com.loopers.batch.job.ranking.WeeklyRankingJobConfig;
+import com.loopers.utils.DatabaseCleanUp;
+import com.loopers.utils.RedisCleanUp;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.core.ExitStatus;
@@ -13,10 +14,10 @@ import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -40,104 +41,104 @@ class WeeklyRankingJobE2ETest {
     private Job job;
 
     @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @BeforeEach
-    void setUp() {
-        jdbcTemplate.execute("""
-            CREATE TABLE IF NOT EXISTS product_metrics (
-                product_id BIGINT PRIMARY KEY,
-                like_count BIGINT NOT NULL DEFAULT 0,
-                sales_count BIGINT NOT NULL DEFAULT 0,
-                view_count BIGINT NOT NULL DEFAULT 0,
-                updated_at DATETIME
-            )
-            """);
-        jdbcTemplate.execute("""
-            CREATE TABLE IF NOT EXISTS mv_product_rank_weekly (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                product_id BIGINT NOT NULL,
-                week_start DATE NOT NULL,
-                total_sales BIGINT NOT NULL,
-                updated_at DATETIME,
-                UNIQUE KEY uq_mv_weekly_product_week (product_id, week_start)
-            )
-            """);
-    }
+    @Autowired
+    private DatabaseCleanUp databaseCleanUp;
+
+    @Autowired
+    private RedisCleanUp redisCleanUp;
 
     @AfterEach
     void tearDown() {
-        jdbcTemplate.execute("DELETE FROM product_metrics");
-        jdbcTemplate.execute("DELETE FROM mv_product_rank_weekly");
+        databaseCleanUp.truncateAllTables();
+        redisCleanUp.truncateAll();
     }
 
-    @DisplayName("weeklyRankingJob이 실행되면 product_metrics를 읽어 mv_product_rank_weekly에 집계 결과를 저장한다.")
+    @DisplayName("weeklyRankingJob이 실행되면 일간 Redis 랭킹을 합산해 ranking_materialized_view에 저장한다.")
     @Test
-    void savesWeeklyRankingFromProductMetrics() throws Exception {
-        // arrange
-        jdbcTemplate.execute("INSERT INTO product_metrics (product_id, sales_count) VALUES (1, 100), (2, 50), (3, 200)");
+    void savesWeeklyRankingFromDailyRedisScores() throws Exception {
         jobLauncherTestUtils.setJob(job);
 
-        LocalDate targetDate = LocalDate.now();
-        LocalDate expectedWeekStart = targetDate.with(DayOfWeek.MONDAY);
+        LocalDate monday = LocalDate.of(2026, 4, 13);
+        addScore(monday, 1L, 3.0);
+        addScore(monday.plusDays(1), 1L, 2.0);
+        addScore(monday.plusDays(2), 2L, 6.0);
 
-        // act
         var jobExecution = jobLauncherTestUtils.launchJob(
             new JobParametersBuilder()
-                .addString("targetDate", targetDate.format(DATE_FORMAT))
+                .addString("targetDate", "20260417")
                 .toJobParameters()
         );
 
-        // assert
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+            """
+            SELECT product_id, score, rank_no
+            FROM ranking_materialized_view
+            WHERE period_type = 'WEEKLY' AND target_date = ?
+            ORDER BY rank_no ASC
+            """,
+            monday
+        );
+
         assertAll(
             () -> assertThat(jobExecution.getExitStatus().getExitCode()).isEqualTo(ExitStatus.COMPLETED.getExitCode()),
-            () -> {
-                List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT product_id, total_sales FROM mv_product_rank_weekly WHERE week_start = ? ORDER BY total_sales DESC",
-                    expectedWeekStart
-                );
-                assertThat(rows).hasSize(3);
-                assertThat(((Number) rows.get(0).get("product_id")).longValue()).isEqualTo(3L);
-                assertThat(((Number) rows.get(0).get("total_sales")).longValue()).isEqualTo(200L);
-                assertThat(((Number) rows.get(1).get("product_id")).longValue()).isEqualTo(1L);
-                assertThat(((Number) rows.get(2).get("product_id")).longValue()).isEqualTo(2L);
-            }
+            () -> assertThat(rows).hasSize(2),
+            () -> assertThat(((Number) rows.get(0).get("product_id")).longValue()).isEqualTo(2L),
+            () -> assertThat(((Number) rows.get(0).get("score")).doubleValue()).isEqualTo(6.0),
+            () -> assertThat(((Number) rows.get(0).get("rank_no")).intValue()).isEqualTo(1),
+            () -> assertThat(((Number) rows.get(1).get("product_id")).longValue()).isEqualTo(1L),
+            () -> assertThat(((Number) rows.get(1).get("score")).doubleValue()).isEqualTo(5.0),
+            () -> assertThat(((Number) rows.get(1).get("rank_no")).intValue()).isEqualTo(2)
         );
     }
 
-    @DisplayName("weeklyRankingJob을 재실행하면 기존 데이터를 덮어쓴다.")
+    @DisplayName("weeklyRankingJob을 재실행하면 같은 주간 bucket 데이터를 새 점수로 덮어쓴다.")
     @Test
-    void overwritesExistingRankingOnRerun() throws Exception {
-        // arrange
-        jdbcTemplate.execute("INSERT INTO product_metrics (product_id, sales_count) VALUES (1, 100)");
+    void overwritesExistingWeeklyRowsOnRerun() throws Exception {
         jobLauncherTestUtils.setJob(job);
 
-        String targetDate = LocalDate.now().format(DATE_FORMAT);
+        LocalDate monday = LocalDate.of(2026, 4, 13);
+        addScore(monday, 1L, 1.0);
 
-        // act — 첫 번째 실행
         jobLauncherTestUtils.launchJob(
             new JobParametersBuilder()
-                .addString("targetDate", targetDate)
+                .addString("targetDate", "20260417")
                 .addLong("run.id", 1L)
                 .toJobParameters()
         );
 
-        // product_metrics 업데이트 후 재실행 (run.id로 새 JobInstance 생성)
-        jdbcTemplate.execute("UPDATE product_metrics SET sales_count = 999 WHERE product_id = 1");
+        redisCleanUp.truncateAll();
+        addScore(monday, 1L, 7.0);
+
         var secondExecution = jobLauncherTestUtils.launchJob(
             new JobParametersBuilder()
-                .addString("targetDate", targetDate)
+                .addString("targetDate", "20260417")
                 .addLong("run.id", 2L)
                 .toJobParameters()
         );
 
-        // assert — 최신 값으로 덮어씌워짐
-        assertThat(secondExecution.getExitStatus().getExitCode()).isEqualTo(ExitStatus.COMPLETED.getExitCode());
-        Long totalSales = jdbcTemplate.queryForObject(
-            "SELECT total_sales FROM mv_product_rank_weekly WHERE product_id = 1 AND week_start = ?",
-            Long.class,
-            LocalDate.now().with(DayOfWeek.MONDAY)
+        Double score = jdbcTemplate.queryForObject(
+            """
+            SELECT score
+            FROM ranking_materialized_view
+            WHERE period_type = 'WEEKLY' AND target_date = ? AND product_id = 1
+            """,
+            Double.class,
+            monday
         );
-        assertThat(totalSales).isEqualTo(999L);
+
+        assertAll(
+            () -> assertThat(secondExecution.getExitStatus().getExitCode()).isEqualTo(ExitStatus.COMPLETED.getExitCode()),
+            () -> assertThat(score).isEqualTo(7.0)
+        );
+    }
+
+    private void addScore(LocalDate date, Long productId, double score) {
+        String key = "ranking:all:" + date.format(DATE_FORMAT);
+        redisTemplate.opsForZSet().add(key, productId.toString(), score);
     }
 }

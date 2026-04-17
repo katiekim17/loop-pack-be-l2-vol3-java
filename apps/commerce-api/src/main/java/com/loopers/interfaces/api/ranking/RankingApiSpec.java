@@ -9,11 +9,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 @Tag(name = "Rankings", description = "랭킹 API")
 public interface RankingApiSpec {
 
-    @Operation(summary = "인기상품 랭킹 조회", description = "기간별(일간/주간/월간) 랭킹 상위 N개의 상품 정보를 반환합니다.")
+    @Operation(summary = "기간별 인기상품 랭킹 조회", description = "일간, 주간, 월간 랭킹 상위 N개의 상품 정보를 반환합니다.")
     @GetMapping
     ApiResponse<RankingV1Dto.RankingPageResponse> getRankings(
         @RequestParam(required = false) String date,
-        @RequestParam(required = false, defaultValue = "daily") String period,
+        @RequestParam(required = false, defaultValue = "DAILY") String periodType,
         @RequestParam(required = false, defaultValue = "20") int size,
         @RequestParam(required = false, defaultValue = "1") int page
     );

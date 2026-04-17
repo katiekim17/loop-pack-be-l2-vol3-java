@@ -6,6 +6,7 @@ import com.loopers.application.product.ProductFacade;
 import com.loopers.domain.outbox.KafkaOutboxMessage;
 import com.loopers.domain.outbox.OutboxEventTopics;
 import com.loopers.domain.product.ProductViewedEvent;
+import com.loopers.domain.ranking.RankingPeriod;
 import com.loopers.domain.ranking.RankingRepository;
 import com.loopers.interfaces.api.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -74,7 +75,7 @@ public class ProductsV1Controller implements ProductsV1ApiSpec {
         } catch (Exception e) {
             log.warn("상품 조회 Kafka 이벤트 발행 실패. productId={}, 이유={}", productId, e.getMessage());
         }
-        Integer ranking = rankingRepository.getRank(productId, LocalDate.now()).orElse(null);
+        Integer ranking = rankingRepository.getRank(RankingPeriod.DAILY, productId, LocalDate.now()).orElse(null);
         return ApiResponse.success(
             ProductV1Dto.ProductDetailResponse.from(productFacade.getProductDetail(productId), ranking)
         );

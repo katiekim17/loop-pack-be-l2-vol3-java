@@ -3,6 +3,7 @@ package com.loopers.interfaces.api.ranking;
 import com.loopers.application.ranking.RankingFacade;
 import com.loopers.application.ranking.RankingInfo;
 import com.loopers.domain.ranking.RankingPeriod;
+import com.loopers.domain.ranking.RankingPeriodDateResolver;
 import com.loopers.interfaces.api.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,11 +24,12 @@ public class RankingV1Controller implements RankingApiSpec {
     private final RankingFacade rankingFacade;
 
     @Override
-    public ApiResponse<RankingV1Dto.RankingPageResponse> getRankings(String date, String period, int size, int page) {
-        LocalDate rankingDate = resolveDate(date);
-        RankingPeriod rankingPeriod = RankingPeriod.from(period);
-        List<RankingInfo> infos = rankingFacade.getRankings(rankingDate, rankingPeriod, page, size);
-        return ApiResponse.success(RankingV1Dto.RankingPageResponse.from(infos));
+    public ApiResponse<RankingV1Dto.RankingPageResponse> getRankings(String date, String periodType, int size, int page) {
+        LocalDate requestDate = resolveDate(date);
+        RankingPeriod rankingPeriod = RankingPeriod.from(periodType);
+        LocalDate targetDate = RankingPeriodDateResolver.normalize(rankingPeriod.name(), requestDate);
+        List<RankingInfo> infos = rankingFacade.getRankings(targetDate, rankingPeriod, page, size);
+        return ApiResponse.success(RankingV1Dto.RankingPageResponse.from(rankingPeriod.name(), targetDate, infos));
     }
 
     private LocalDate resolveDate(String date) {
